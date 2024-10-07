@@ -4528,11 +4528,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\EMİRCAN\\Source\\Repos\\LibraryApp\\LibraryApp\\LibraryApp.csproj",
+      "projectUniqueName": "C:\\Users\\EMİRCAN\\Source\\Repos\\BookTrack\\LibraryApp\\LibraryApp\\LibraryApp.csproj",
       "projectName": "LibraryApp",
-      "projectPath": "C:\\Users\\EMİRCAN\\Source\\Repos\\LibraryApp\\LibraryApp\\LibraryApp.csproj",
+      "projectPath": "C:\\Users\\EMİRCAN\\Source\\Repos\\BookTrack\\LibraryApp\\LibraryApp\\LibraryApp.csproj",
       "packagesPath": "C:\\Users\\EMİRCAN\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\EMİRCAN\\Source\\Repos\\LibraryApp\\LibraryApp\\obj\\",
+      "outputPath": "C:\\Users\\EMİRCAN\\Source\\Repos\\BookTrack\\LibraryApp\\LibraryApp\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "C:\\Users\\EMİRCAN\\AppData\\Roaming\\NuGet\\NuGet.Config",
