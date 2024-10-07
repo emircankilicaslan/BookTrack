@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using LibraryApp.Models;
 
 namespace LibraryApp.Data
@@ -27,5 +27,3 @@ namespace LibraryApp.Data
         }
     }
 }
-
-
