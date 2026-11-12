@@ -78,6 +78,7 @@ namespace LibraryApp.Controllers
         [HttpPost("checkout/{id}")]
         public async Task<IActionResult> CheckOutBook(int id, [FromBody] CheckOut checkoutDetails)
         {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
             var book = await _context.Books.FindAsync(id);
             if (book == null || book.IsCheckedOut)
                 return BadRequest(new { message = "Kitap bulunamadı veya zaten teslim alınmış." });
@@ -90,7 +91,7 @@ namespace LibraryApp.Controllers
             // CheckOut kaydı oluştur
             checkoutDetails.BookId = id;
             checkoutDetails.CheckOutDate = DateTime.Now;
-            checkoutDetails.DueDate = book.DueDate.Value;
+            checkoutDetails.DueDate = book.DueDate ?? DateTime.Now;
             _context.CheckOuts.Add(checkoutDetails);
 
             await _context.SaveChangesAsync();
@@ -109,7 +110,7 @@ namespace LibraryApp.Controllers
             if (checkoutRecord == null) return NotFound();
 
             // Ceza hesaplama
-            var lateDays = CalculateLateDays(book.DueDate.Value, DateTime.Now);
+            var lateDays = CalculateLateDays(book.DueDate ?? DateTime.Now, DateTime.Now);
             var fine = lateDays * 5; // 5 ₺ / gün gecikme
 
             // Teslim işlemi güncelle
