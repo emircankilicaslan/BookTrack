@@ -23,6 +23,10 @@ namespace LibraryApp.Data
                 .Property(b => b.Price)
                 .HasColumnType("decimal(18, 2)");
 
+            modelBuilder.Entity<Book>()
+                .Property(b => b.RowVersion)
+                .IsRowVersion();
+
            
         }
     }
