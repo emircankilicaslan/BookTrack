@@ -31,7 +31,7 @@ Güvenlik: metinler `textContent` ile yazılır (`innerHTML` yok), sayfa `Conten
 ## Özellikler
 - Kitap CRUD (`/api/books`); girdiler doğrulanır (başlık ve ISBN zorunlu, yayın yılı 1000–2100, fiyat ≥ 0)
 - **Ödünç verme** (`POST /api/books/checkout/{id}`): kitap zaten ödünçteyse reddedilir, teslim tarihi **15 iş günü** sonrası olarak hesaplanır (hafta sonları sayılmaz)
-- **İade** (`POST /api/books/checkin/{id}`): gecikme iş günü sayısı üzerinden **günlük 5 ₺ ceza** hesaplanır; yanıtta `lateDays` ve `fine` alanları da döner. Son teslim günü içindeki iade zamanında sayılır, hafta sonları cezaya dahil edilmez
+- **İade** (`POST /api/books/checkin/{id}`): gecikme iş günü sayısı üzerinden **günlük 5 ₺ ceza** hesaplanır; yanıtta `lateDays` ve `fine` alanları da döner. Son teslim günü içindeki iade zamanında sayılır; hafta sonları ve resmi tatiller ne teslim süresine ne de cezaya dahil edilir
 - Ödünç kaydı (CheckOut) geçmişi tutulur; girdiler doğrulanır (TCKN 11 hane, ad zorunlu)
 - EF Core migration'ları, Swagger UI (geliştirme ortamında)
 
@@ -44,6 +44,7 @@ Güvenlik: metinler `textContent` ile yazılır (`innerHTML` yok), sayfa `Conten
 | DELETE | `/api/books/{id}` | Sil |
 | POST | `/api/books/checkout/{id}` | Ödünç ver (gövde: ad, telefon, TCKN) |
 | POST | `/api/books/checkin/{id}` | İade al, gecikme günü ve cezayı döndür |
+| GET | `/api/books/{id}/fine-preview` | İade edilirse şu an uygulanacak gecikme günü ve ceza (iade etmeden önce gösterilir) |
 | GET | `/api/books/{id}/history` | Ödünç geçmişi (ad ve tarihler; TCKN ve telefon dönmez) |
 
 ## Çalıştırma
@@ -56,15 +57,17 @@ dotnet run                     # Arayüz: http://localhost:5210  ·  Swagger: /s
 Örnek kitap ve ödünç kayıtlarıyla denemek için uygulama çalışırken: `node scripts/demo-verisi.mjs` (Node 18+; ISBN'ler örnek değerlerdir).
 
 ```bash
-dotnet test LibraryApp/LibraryApp.sln   # 29 test
+dotnet test LibraryApp/LibraryApp.sln   # 34 test
 ```
+**Resmi tatiller** `appsettings.json` içindeki `Library:Holidays` listesinden okunur (yyyy-MM-dd); 2026 tatilleri tanımlıdır. Listede olmayan bir yıl için tatiller iş günü sayılır, bu yüzden her yıl başında güncelleyin.
+
 Farklı bir SQL Server için `ConnectionStrings:DefaultConnection` değerini değiştirin.
 
 ## Testler
-xUnit ile 29 test: ödünç süresi ve gecikme hesabı (hafta sonu ve sınır durumları, `LoanCalculator`), kitap doğrulaması, ödünç verme/iade akışı, gecikme cezası, ödünçteki kitabın silinememesi, geçmiş uç noktasının kişisel veri sızdırmaması ve arayüzün güvenlik başlıkları (`WebApplicationFactory` + bellek içi veritabanı). GitHub Actions her push ve pull request'te derleme ve testleri çalıştırır.
+xUnit ile 34 test: ödünç süresi ve gecikme hesabı (hafta sonu, resmi tatil ve sınır durumları, `LoanCalculator`), kitap doğrulaması, ödünç verme/iade akışı, gecikme cezası, ödünçteki kitabın silinememesi, geçmiş uç noktasının kişisel veri sızdırmaması ve arayüzün güvenlik başlıkları (`WebApplicationFactory` + bellek içi veritabanı). GitHub Actions her push ve pull request'te derleme ve testleri çalıştırır.
 
 ## Bilinen sınırlar
-Kimlik doğrulama yok (arayüz ve API herkese açıktır; yalnızca güvenli bir ağda çalıştırın); resmi tatiller iş günü hesabında dikkate alınmaz. TCKN kişisel veridir: üretimde saklama/şifreleme politikası gerekir.
+Kimlik doğrulama yok (arayüz ve API herkese açıktır; yalnızca güvenli bir ağda çalıştırın); dini bayram tarihleri her yıl değiştiği için resmi tatil listesi yılbaşında güncellenmelidir. TCKN kişisel veridir: üretimde saklama/şifreleme politikası gerekir.
 
 ---
 *Geliştirici: Emircan Kılıçaslan*

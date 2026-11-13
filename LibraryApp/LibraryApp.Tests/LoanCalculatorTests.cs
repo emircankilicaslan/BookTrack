@@ -48,6 +48,36 @@ public class LoanCalculatorTests
         Assert.Equal(0, LoanCalculator.LateBusinessDays(Cuma, Cuma.AddHours(6)));
     }
 
+    // ---- Resmi tatiller
+
+    private static readonly IReadOnlySet<DateOnly> Tatiller = new HashSet<DateOnly> { new(2026, 11, 17), new(2026, 11, 18) }; // Salı, Çarşamba
+
+    [Fact]
+    public void DueDate_ResmiTatilleriAtlar()
+    {
+        // Cuma + 3 iş günü: Pzt 16 (1), Salı 17 ve Çarşamba 18 tatil, Per 19 (2), Cum 20 (3) → 20 Kasım
+        Assert.Equal(new DateTime(2026, 11, 20), LoanCalculator.DueDate(Cuma, 3, Tatiller).Date);
+        // Tatil yokken aynı hesap 18 Kasım'a düşer (Pzt 16, Salı 17, Çarşamba 18)
+        Assert.Equal(new DateTime(2026, 11, 18), LoanCalculator.DueDate(Cuma, 3).Date);
+    }
+
+    [Fact]
+    public void LateBusinessDays_ResmiTatilleriSaymaz()
+    {
+        var iade = new DateTime(2026, 11, 20, 12, 0, 0); // Cuma
+        Assert.Equal(5, LoanCalculator.LateBusinessDays(Cuma, iade));               // Pzt-Cum
+        Assert.Equal(3, LoanCalculator.LateBusinessDays(Cuma, iade, Tatiller));     // Salı ve Çarşamba sayılmaz
+    }
+
+    [Fact]
+    public void IsBusinessDay_TatilGunuVeHaftaSonuFalseDoner()
+    {
+        Assert.False(LoanCalculator.IsBusinessDay(new DateTime(2026, 11, 17), Tatiller));
+        Assert.False(LoanCalculator.IsBusinessDay(new DateTime(2026, 11, 14), Tatiller)); // Cumartesi
+        Assert.True(LoanCalculator.IsBusinessDay(new DateTime(2026, 11, 19), Tatiller));
+        Assert.True(LoanCalculator.IsBusinessDay(new DateTime(2026, 11, 17)));            // tatil listesi yokken
+    }
+
     [Theory]
     [InlineData(0, 0)]
     [InlineData(1, 5)]

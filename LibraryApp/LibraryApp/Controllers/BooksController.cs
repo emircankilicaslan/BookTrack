@@ -3,6 +3,7 @@ using LibraryApp.Models;
 using LibraryApp.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace LibraryApp.Controllers
 {
@@ -11,10 +12,12 @@ namespace LibraryApp.Controllers
     public class BooksController : ControllerBase
     {
         private readonly LibraryContext _context;
+        private readonly IReadOnlySet<DateOnly> _holidays;
 
-        public BooksController(LibraryContext context)
+        public BooksController(LibraryContext context, IOptions<LibraryOptions> options)
         {
             _context = context;
+            _holidays = options.Value.HolidaySet;
         }
 
         // Tüm kitapları listele (GET metodu)
@@ -97,6 +100,19 @@ namespace LibraryApp.Controllers
             return NoContent();
         }
 
+        // İade edilirse şu an uygulanacak gecikme ve ceza (iade etmeden önce göstermek için).
+        [HttpGet("{id}/fine-preview")]
+        public async Task<ActionResult<FinePreview>> GetFinePreview(int id)
+        {
+            var book = await _context.Books.AsNoTracking().FirstOrDefaultAsync(b => b.Id == id);
+            if (book == null) return NotFound();
+            if (!book.IsCheckedOut || book.DueDate == null)
+                return BadRequest(new { message = "Kitap ödünçte değil." });
+
+            var lateDays = LoanCalculator.LateBusinessDays(book.DueDate.Value, DateTime.Now, _holidays);
+            return new FinePreview(lateDays, LoanCalculator.Fine(lateDays), book.DueDate.Value);
+        }
+
         // Kitap teslim alma (Check-Out) - POST metodu
         [HttpPost("checkout/{id}")]
         public async Task<IActionResult> CheckOutBook(int id, [FromBody] CheckOut checkoutDetails)
@@ -110,7 +126,7 @@ namespace LibraryApp.Controllers
             book.IsCheckedOut = true;
             book.CheckedOutBy = checkoutDetails.Name;
             book.CheckOutDate = now;
-            book.DueDate = LoanCalculator.DueDate(now);
+            book.DueDate = LoanCalculator.DueDate(now, LoanCalculator.LoanBusinessDays, _holidays);
 
             // CheckOut kaydı oluştur
             checkoutDetails.Id = 0;
@@ -137,7 +153,7 @@ namespace LibraryApp.Controllers
 
             // Ceza hesaplama
             var now = DateTime.Now;
-            var lateDays = LoanCalculator.LateBusinessDays(book.DueDate ?? now, now);
+            var lateDays = LoanCalculator.LateBusinessDays(book.DueDate ?? now, now, _holidays);
             var fine = LoanCalculator.Fine(lateDays);
 
             // Teslim işlemi güncelle
@@ -156,6 +172,9 @@ namespace LibraryApp.Controllers
 
     /// <summary>Ödünç geçmişi satırı (kişisel veri içermez).</summary>
     public record LoanHistoryItem(string Name, DateTime CheckOutDate, DateTime DueDate, DateTime? ActualReturnDate);
+
+    /// <summary>İade edilirse uygulanacak gecikme ve ceza.</summary>
+    public record FinePreview(int LateDays, decimal Fine, DateTime DueDate);
 
     /// <summary>İade yanıtı. <c>message</c> geriye dönük uyumluluk için korunur.</summary>
     public record CheckInResult(string Message, int LateDays, decimal Fine);

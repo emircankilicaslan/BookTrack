@@ -6,6 +6,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 
 builder.Services.AddControllers();
+builder.Services.Configure<LibraryApp.Services.LibraryOptions>(builder.Configuration.GetSection(LibraryApp.Services.LibraryOptions.SectionName));
 builder.Services.AddDbContext<LibraryContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 builder.Services.AddEndpointsApiExplorer();
