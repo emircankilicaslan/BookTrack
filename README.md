@@ -74,5 +74,7 @@ GitHub Actions her push ve pull request'te bir SQL Server servisiyle derleme ve 
 ## Bilinen sınırlar
 Kimlik doğrulama yok (arayüz ve API herkese açıktır; yalnızca güvenli bir ağda çalıştırın); dini bayram tarihleri her yıl değiştiği için resmi tatil listesi yılbaşında güncellenmelidir. TCKN kişisel veridir: üretimde saklama/şifreleme politikası gerekir.
 
+Bilinen veri bütünlüğü eksikleri: ISBN tekrarı engellenmez; ödünç kayıtları kitaba veritabanı ilişkisiyle bağlı değildir, bu yüzden geçmişi olan bir kitap silinirse kayıtları yetim kalır ve geçmiş görüntülenemez; T.C. kimlik numarası yalnızca 11 hane olarak doğrulanır (sağlama algoritması denetlenmez); başlık ve ISBN için uzunluk sınırı yoktur.
+
 ---
 *Geliştirici: Emircan Kılıçaslan*
