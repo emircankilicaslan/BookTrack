@@ -82,7 +82,7 @@ namespace LibraryApp.Controllers
             book.PublicationYear = updatedBook.PublicationYear;
             book.Price = updatedBook.Price;
 
-            await _context.SaveChangesAsync();
+            if (!await TrySaveAsync()) return Conflict(new { message = "Kitap aynı anda başka bir işlemle değiştirildi. Güncel durumu görmek için yenileyin." });
             return NoContent();
         }
 
@@ -96,8 +96,22 @@ namespace LibraryApp.Controllers
                 return Conflict(new { message = "Ödünçte olan kitap silinemez; önce iade alınmalıdır." });
 
             _context.Books.Remove(book);
-            await _context.SaveChangesAsync();
+            if (!await TrySaveAsync()) return Conflict(new { message = "Kitap aynı anda başka bir işlemle değiştirildi. Güncel durumu görmek için yenileyin." });
             return NoContent();
+        }
+
+        /// <summary>Kaydeder; eş zamanlı değişiklik çakışmasında false döner.</summary>
+        private async Task<bool> TrySaveAsync()
+        {
+            try
+            {
+                await _context.SaveChangesAsync();
+                return true;
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return false;
+            }
         }
 
         // İade edilirse şu an uygulanacak gecikme ve ceza (iade etmeden önce göstermek için).
@@ -136,7 +150,9 @@ namespace LibraryApp.Controllers
             checkoutDetails.ActualReturnDate = null;
             _context.CheckOuts.Add(checkoutDetails);
 
-            await _context.SaveChangesAsync();
+            // Aynı kitap aynı anda iki kişiye verilemez: kitap kaydı bu arada değiştiyse (başka bir ödünç gibi)
+            // kayıt reddedilir ve ödünç kaydı da yazılmaz (SaveChanges tek işlemdir).
+            if (!await TrySaveAsync()) return Conflict(new { message = "Kitap aynı anda başka bir işlemle değiştirildi. Güncel durumu görmek için yenileyin." });
             return NoContent();
         }
 
@@ -165,7 +181,7 @@ namespace LibraryApp.Controllers
             // CheckOut kaydı güncelle
             checkoutRecord.ActualReturnDate = now;
 
-            await _context.SaveChangesAsync();
+            if (!await TrySaveAsync()) return Conflict(new { message = "Kitap aynı anda başka bir işlemle değiştirildi. Güncel durumu görmek için yenileyin." });
             return Ok(new CheckInResult($"Kitap başarıyla teslim edildi. Gecikme cezası: {fine} ₺", lateDays, fine));
         }
     }

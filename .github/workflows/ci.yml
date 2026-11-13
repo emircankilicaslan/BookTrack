@@ -8,6 +8,19 @@ on:
 jobs:
   build-test:
     runs-on: ubuntu-latest
+    services:
+      sql:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: Ci-Test-Parola-1!
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P 'Ci-Test-Parola-1!' -Q 'SELECT 1'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -15,4 +28,7 @@ jobs:
           dotnet-version: 8.0.x
       - run: dotnet restore LibraryApp/LibraryApp.sln
       - run: dotnet build LibraryApp/LibraryApp.sln -c Release --no-restore
-      - run: dotnet test LibraryApp/LibraryApp.sln -c Release --no-build --verbosity normal
+      - name: Test (birim + SQL Server eş zamanlılık)
+        env:
+          BOOKTRACK_TEST_SQL: Server=localhost,1433;User Id=sa;Password=Ci-Test-Parola-1!;TrustServerCertificate=True
+        run: dotnet test LibraryApp/LibraryApp.sln -c Release --no-build --verbosity normal

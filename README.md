@@ -57,17 +57,24 @@ dotnet run                     # Arayüz: http://localhost:5210  ·  Swagger: /s
 Örnek kitap ve ödünç kayıtlarıyla denemek için uygulama çalışırken: `node scripts/demo-verisi.mjs` (Node 18+; ISBN'ler örnek değerlerdir).
 
 ```bash
-dotnet test LibraryApp/LibraryApp.sln   # 34 test
+dotnet test LibraryApp/LibraryApp.sln   # 37 test (SQL Server testleri BOOKTRACK_TEST_SQL tanımlı değilse atlanır)
 ```
 **Resmi tatiller** `appsettings.json` içindeki `Library:Holidays` listesinden okunur (yyyy-MM-dd); 2026 tatilleri tanımlıdır. Listede olmayan bir yıl için tatiller iş günü sayılır, bu yüzden her yıl başında güncelleyin.
 
 Farklı bir SQL Server için `ConnectionStrings:DefaultConnection` değerini değiştirin.
 
 ## Testler
-xUnit ile 34 test: ödünç süresi ve gecikme hesabı (hafta sonu, resmi tatil ve sınır durumları, `LoanCalculator`), kitap doğrulaması, ödünç verme/iade akışı, gecikme cezası, ödünçteki kitabın silinememesi, geçmiş uç noktasının kişisel veri sızdırmaması ve arayüzün güvenlik başlıkları (`WebApplicationFactory` + bellek içi veritabanı). GitHub Actions her push ve pull request'te derleme ve testleri çalıştırır.
+xUnit ile 37 test: ödünç süresi ve gecikme hesabı (hafta sonu, resmi tatil ve sınır durumları, `LoanCalculator`), kitap doğrulaması, ödünç verme/iade akışı, gecikme cezası, ödünçteki kitabın silinememesi, geçmiş uç noktasının kişisel veri sızdırmaması ve arayüzün güvenlik başlıkları (`WebApplicationFactory` + bellek içi veritabanı). **Eş zamanlılık:** aynı kitap aynı anda birden fazla kişiye ödünç verilemez. `Book` kaydında SQL Server `rowversion` sütunu vardır; çakışan istekten yalnızca biri başarılı olur, diğeri 409 (veya kitap artık ödünçte olduğu için 400) alır ve reddedilen isteğin ödünç kaydı yazılmaz. Bu davranış bellek içi sağlayıcıyla üretilemediği için gerçek SQL Server'a karşı test edilir (3 test, her biri kendi geçici veritabanını kurar ve siler):
+```powershell
+$env:BOOKTRACK_TEST_SQL = 'Server=(localdb)mssqllocaldb;Integrated Security=true;TrustServerCertificate=True'
+dotnet test LibraryApp/LibraryApp.sln
+```
+GitHub Actions her push ve pull request'te bir SQL Server servisiyle derleme ve tüm testleri çalıştırır.
 
 ## Bilinen sınırlar
 Kimlik doğrulama yok (arayüz ve API herkese açıktır; yalnızca güvenli bir ağda çalıştırın); dini bayram tarihleri her yıl değiştiği için resmi tatil listesi yılbaşında güncellenmelidir. TCKN kişisel veridir: üretimde saklama/şifreleme politikası gerekir.
+
+Bilinen veri bütünlüğü eksikleri: ISBN tekrarı engellenmez; ödünç kayıtları kitaba veritabanı ilişkisiyle bağlı değildir, bu yüzden geçmişi olan bir kitap silinirse kayıtları yetim kalır ve geçmiş görüntülenemez; T.C. kimlik numarası yalnızca 11 hane olarak doğrulanır (sağlama algoritması denetlenmez); başlık ve ISBN için uzunluk sınırı yoktur.
 
 ---
 *Geliştirici: Emircan Kılıçaslan*

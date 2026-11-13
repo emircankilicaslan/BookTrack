@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace LibraryApp.Models
 {
@@ -22,5 +23,12 @@ namespace LibraryApp.Models
         public string? CheckedOutBy { get; set; }
         public DateTime? CheckOutDate { get; set; }
         public DateTime? DueDate { get; set; }
+
+        /// <summary>
+        /// Eş zamanlı değişiklik denetimi (SQL Server rowversion). İki istek aynı kitabı aynı anda değiştirmeye
+        /// çalışırsa yalnızca biri başarılı olur; diğeri 409 alır. İstemciye gösterilmez ve istemciden alınmaz.
+        /// </summary>
+        [JsonIgnore]
+        public byte[]? RowVersion { get; set; }
     }
 }
