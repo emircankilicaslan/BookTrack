@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BookTrack · Kütüphane Takip</title>
+  <meta name="description" content="Kitap envanteri, ödünç verme ve iade takibi">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <header class="ust">
+    <div class="ust-ic">
+      <div class="logo"><span class="logo-isaret" aria-hidden="true"></span> BookTrack</div>
+      <p class="soluk ust-metin">Kütüphane ödünç takibi</p>
+      <button id="kitap-ekle" class="dugme birincil">+ Kitap ekle</button>
+    </div>
+  </header>
+
+  <main class="icerik">
+    <p class="bildirim hata" id="hata" role="alert" hidden></p>
+    <p class="bildirim basari" id="basari" role="status" hidden></p>
+
+    <section class="izgara" id="ozet" aria-label="Özet"></section>
+
+    <section class="kart">
+      <div class="arac-cubugu">
+        <input id="ara" type="search" placeholder="Başlık veya ISBN ara…" aria-label="Kitap ara">
+        <div class="filtre" id="filtre" role="group" aria-label="Duruma göre filtrele">
+          <button data-f="hepsi" class="aktif">Tümü</button>
+          <button data-f="musait">Rafta</button>
+          <button data-f="odunc">Ödünçte</button>
+          <button data-f="gecikmis">Geciken</button>
+        </div>
+      </div>
+      <div class="tablo-kap">
+        <table>
+          <thead><tr>
+            <th>Kitap</th><th>ISBN</th><th>Yıl</th><th>Fiyat</th><th>Durum</th><th></th>
+          </tr></thead>
+          <tbody id="govde"></tbody>
+        </table>
+      </div>
+      <div class="bos" id="bos" hidden>
+        <strong>Kitap bulunamadı</strong>
+        <span>Aramayı ya da filtreyi değiştirmeyi deneyin.</span>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="dialog"><div id="dialog-icerik" class="dialog-icerik"></div></dialog>
+  <script src="app.js" defer></script>
+</body>
+</html>

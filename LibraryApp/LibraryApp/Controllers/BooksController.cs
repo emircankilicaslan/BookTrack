@@ -1,5 +1,6 @@
 using LibraryApp.Data;
 using LibraryApp.Models;
+using LibraryApp.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -20,7 +21,7 @@ namespace LibraryApp.Controllers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Book>>> GetBooks()
         {
-            return await _context.Books.ToListAsync();
+            return await _context.Books.AsNoTracking().OrderBy(b => b.Title).ToListAsync();
         }
 
         // ID ile kitap getir (GET metodu)
@@ -32,11 +33,31 @@ namespace LibraryApp.Controllers
             return book;
         }
 
+        // Kitabın ödünç geçmişi. Kişisel veri (TCKN, telefon) dışarıya verilmez.
+        [HttpGet("{id}/history")]
+        public async Task<ActionResult<IEnumerable<LoanHistoryItem>>> GetHistory(int id)
+        {
+            if (!await _context.Books.AnyAsync(b => b.Id == id)) return NotFound();
+
+            return await _context.CheckOuts.AsNoTracking()
+                .Where(c => c.BookId == id)
+                .OrderByDescending(c => c.CheckOutDate)
+                .Select(c => new LoanHistoryItem(c.Name, c.CheckOutDate, c.DueDate, c.ActualReturnDate))
+                .ToListAsync();
+        }
+
         // Kitap ekle (POST metodu)
         [HttpPost]
         public async Task<IActionResult> AddBook([FromBody] Book newBook)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
+
+            // Ödünç alanları yalnızca ödünç verme işlemiyle değişir; istemciden gelenler yok sayılır.
+            newBook.Id = 0;
+            newBook.IsCheckedOut = false;
+            newBook.CheckedOutBy = null;
+            newBook.CheckOutDate = null;
+            newBook.DueDate = null;
 
             _context.Books.Add(newBook);
             await _context.SaveChangesAsync();
@@ -68,6 +89,8 @@ namespace LibraryApp.Controllers
         {
             var book = await _context.Books.FindAsync(id);
             if (book == null) return NotFound();
+            if (book.IsCheckedOut)
+                return Conflict(new { message = "Ödünçte olan kitap silinemez; önce iade alınmalıdır." });
 
             _context.Books.Remove(book);
             await _context.SaveChangesAsync();
@@ -83,15 +106,18 @@ namespace LibraryApp.Controllers
             if (book == null || book.IsCheckedOut)
                 return BadRequest(new { message = "Kitap bulunamadı veya zaten teslim alınmış." });
 
+            var now = DateTime.Now;
             book.IsCheckedOut = true;
             book.CheckedOutBy = checkoutDetails.Name;
-            book.CheckOutDate = DateTime.Now;
-            book.DueDate = CalculateDueDate(DateTime.Now, 15); // 15 iş günü
+            book.CheckOutDate = now;
+            book.DueDate = LoanCalculator.DueDate(now);
 
             // CheckOut kaydı oluştur
+            checkoutDetails.Id = 0;
             checkoutDetails.BookId = id;
-            checkoutDetails.CheckOutDate = DateTime.Now;
-            checkoutDetails.DueDate = book.DueDate ?? DateTime.Now;
+            checkoutDetails.CheckOutDate = now;
+            checkoutDetails.DueDate = book.DueDate.Value;
+            checkoutDetails.ActualReturnDate = null;
             _context.CheckOuts.Add(checkoutDetails);
 
             await _context.SaveChangesAsync();
@@ -110,8 +136,9 @@ namespace LibraryApp.Controllers
             if (checkoutRecord == null) return NotFound();
 
             // Ceza hesaplama
-            var lateDays = CalculateLateDays(book.DueDate ?? DateTime.Now, DateTime.Now);
-            var fine = lateDays * 5; // 5 ₺ / gün gecikme
+            var now = DateTime.Now;
+            var lateDays = LoanCalculator.LateBusinessDays(book.DueDate ?? now, now);
+            var fine = LoanCalculator.Fine(lateDays);
 
             // Teslim işlemi güncelle
             book.IsCheckedOut = false;
@@ -120,42 +147,16 @@ namespace LibraryApp.Controllers
             book.DueDate = null;
 
             // CheckOut kaydı güncelle
-            checkoutRecord.ActualReturnDate = DateTime.Now;
+            checkoutRecord.ActualReturnDate = now;
 
             await _context.SaveChangesAsync();
-            return Ok(new { message = $"Kitap başarıyla teslim edildi. Gecikme cezası: {fine} ₺" });
-        }
-
-        // 15 iş günü hesaplayan yardımcı metod
-        private DateTime CalculateDueDate(DateTime checkOutDate, int businessDays)
-        {
-            var dueDate = checkOutDate;
-            while (businessDays > 0)
-            {
-                dueDate = dueDate.AddDays(1);
-                if (dueDate.DayOfWeek != DayOfWeek.Saturday && dueDate.DayOfWeek != DayOfWeek.Sunday)
-                    businessDays--;
-            }
-            return dueDate;
-        }
-
-        // Gecikme günlerini hesaplama metodu
-        private int CalculateLateDays(DateTime dueDate, DateTime returnDate)
-        {
-            if (returnDate <= dueDate) return 0;
-
-            int lateDays = 0;
-            var date = dueDate;
-
-            while (date < returnDate)
-            {
-                date = date.AddDays(1);
-                if (date.DayOfWeek != DayOfWeek.Saturday && date.DayOfWeek != DayOfWeek.Sunday)
-                    lateDays++;
-            }
-
-            return lateDays;
+            return Ok(new CheckInResult($"Kitap başarıyla teslim edildi. Gecikme cezası: {fine} ₺", lateDays, fine));
         }
     }
-}
 
+    /// <summary>Ödünç geçmişi satırı (kişisel veri içermez).</summary>
+    public record LoanHistoryItem(string Name, DateTime CheckOutDate, DateTime DueDate, DateTime? ActualReturnDate);
+
+    /// <summary>İade yanıtı. <c>message</c> geriye dönük uyumluluk için korunur.</summary>
+    public record CheckInResult(string Message, int LateDays, decimal Fine);
+}
