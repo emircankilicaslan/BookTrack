@@ -24,19 +24,6 @@ const para = (n) => Number(n).toLocaleString("tr-TR", { style: "currency", curre
 const tarih = (s) => (s ? new Date(s).toLocaleDateString("tr-TR", { day: "numeric", month: "short", year: "numeric" }) : "–");
 const tarihSaat = (s) => (s ? new Date(s).toLocaleString("tr-TR", { dateStyle: "medium", timeStyle: "short" }) : "–");
 
-/** Sunucudaki hesabın görüntü amaçlı kopyası: son tarihten bugüne gecikilen iş günü sayısı. */
-function gecikenIsGunu(sonTarih, simdi = new Date()) {
-  const bit = new Date(sonTarih);
-  if (simdi <= bit) return 0;
-  let g = 0;
-  for (const d = new Date(bit); d < simdi; ) {
-    d.setDate(d.getDate() + 1);
-    if (d.getDay() !== 0 && d.getDay() !== 6) g++;
-  }
-  return g;
-}
-const GUNLUK_CEZA = 5;
-
 class ApiHatasi extends Error {}
 
 async function api(yol, { yontem = "GET", govde } = {}) {
@@ -80,7 +67,7 @@ const hataGoster = (e) => duyur("hata", e.message || String(e));
 // Durum ve çizim
 // ---------------------------------------------------------------------------
 
-const durum = { kitaplar: [], filtre: "hepsi", ara: "" };
+const durum = { kitaplar: [], filtre: "hepsi", ara: "", birikmisCeza: 0 };
 
 const gecikmis = (k) => k.isCheckedOut && k.dueDate && new Date(k.dueDate) < new Date();
 const turkceKucult = (s) => (s || "").toLocaleLowerCase("tr-TR");
@@ -88,6 +75,10 @@ const turkceKucult = (s) => (s || "").toLocaleLowerCase("tr-TR");
 async function yukle() {
   try {
     durum.kitaplar = await api("/api/books");
+    // Gecikmiş kitapların cezası sunucuda hesaplanır (hafta sonu ve resmi tatiller orada bilinir).
+    const gecikenler = durum.kitaplar.filter(gecikmis);
+    const onizlemeler = await Promise.all(gecikenler.map((k) => api(`/api/books/${k.id}/fine-preview`).catch(() => null)));
+    durum.birikmisCeza = onizlemeler.reduce((t, o) => t + (o?.fine ?? 0), 0);
     ciz();
   } catch (e) { hataGoster(e); }
 }
@@ -96,14 +87,13 @@ function ozetCiz() {
   const k = durum.kitaplar;
   const oduncte = k.filter((x) => x.isCheckedOut).length;
   const geciken = k.filter(gecikmis);
-  const ceza = geciken.reduce((t, x) => t + gecikenIsGunu(x.dueDate) * GUNLUK_CEZA, 0);
   const kart = (etiket, deger, sinif, not) => h("div", { class: "kart istatistik" },
     h("span", { class: "etiket" }, etiket), h("span", { class: `deger ${sinif}` }, String(deger)), h("span", { class: "not" }, not));
   $("#ozet").replaceChildren(
     kart("Toplam kitap", k.length, "d-ana", "envanterde"),
     kart("Rafta", k.length - oduncte, "d-yesil", "ödünç verilebilir"),
     kart("Ödünçte", oduncte, "d-sari", "okuyucuda"),
-    kart("Geciken", geciken.length, geciken.length ? "d-kirmizi" : "d-yesil", geciken.length ? `birikmiş ceza ≈ ${para(ceza)}` : "gecikme yok"));
+    kart("Geciken", geciken.length, geciken.length ? "d-kirmizi" : "d-yesil", geciken.length ? `birikmiş ceza ${para(durum.birikmisCeza)}` : "gecikme yok"));
 }
 
 function durumRozeti(k) {
@@ -228,14 +218,16 @@ function oduncDialogu(k) {
   });
 }
 
-function iadeDialogu(k) {
-  const gun = gecikenIsGunu(k.dueDate);
+async function iadeDialogu(k) {
+  let onizleme;
+  try { onizleme = await api(`/api/books/${k.id}/fine-preview`); } catch (e) { hataGoster(e); return; }
+  const gun = onizleme.lateDays;
   formPenceresi({
     baslik: "İade al", onay: "İade al",
     aciklama: `${k.title} · ${k.checkedOutBy} · son teslim ${tarih(k.dueDate)}`,
     alanlar: [h("div", { class: "tam ceza" },
       h("span", { class: "soluk" }, gun ? `${gun} iş günü gecikme` : "Zamanında iade"),
-      h("strong", { class: gun ? "d-kirmizi" : "d-yesil" }, para(gun * GUNLUK_CEZA)))],
+      h("strong", { class: gun ? "d-kirmizi" : "d-yesil" }, para(onizleme.fine)))],
     gonder: async () => {
       const s = await api(`/api/books/checkin/${k.id}`, { yontem: "POST" });
       kapat();

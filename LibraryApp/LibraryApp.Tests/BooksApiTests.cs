@@ -18,9 +18,20 @@ public class BooksApiTests : IClassFixture<BooksApiTests.Fabrika>
     {
         private readonly string _ad = $"kutuphane-{Guid.NewGuid():N}";
 
+        /// <summary>Testte tatil sayılan gün: yedi gün önceki ilk iş günü.</summary>
+        public static readonly DateTime Tatil = SonIsGunu(DateTime.Today.AddDays(-7));
+        public static readonly IReadOnlySet<DateOnly> TatilKumesi = new HashSet<DateOnly> { DateOnly.FromDateTime(Tatil) };
+
+        private static DateTime SonIsGunu(DateTime d)
+        {
+            while (d.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday) d = d.AddDays(-1);
+            return d;
+        }
+
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             builder.UseEnvironment("Development");
+            builder.UseSetting("Library:Holidays:0", Tatil.ToString("yyyy-MM-dd"));
             builder.ConfigureServices(services =>
             {
                 var eski = services.Where(d => d.ServiceType == typeof(DbContextOptions<LibraryContext>)).ToList();
@@ -141,13 +152,46 @@ public class BooksApiTests : IClassFixture<BooksApiTests.Fabrika>
             await db.SaveChangesAsync();
         }
 
-        var beklenenGun = LoanCalculator.LateBusinessDays(son, DateTime.Now);
+        var beklenenGun = LoanCalculator.LateBusinessDays(son, DateTime.Now, Fabrika.TatilKumesi);
         var r = await _istemci.PostAsync($"/api/books/checkin/{id}", null);
         var sonuc = await r.Content.ReadFromJsonAsync<JsonElement>();
 
         Assert.True(beklenenGun >= 9);
         Assert.Equal(beklenenGun, sonuc.GetProperty("lateDays").GetInt32());
         Assert.Equal(beklenenGun * 5m, sonuc.GetProperty("fine").GetDecimal());
+    }
+
+    [Fact]
+    public async Task CezaOnizleme_YapilandirilmisResmiTatiliSaymaz()
+    {
+        var id = await KitapEkle();
+        var son = DateTime.Today.AddDays(-14).AddHours(10);
+
+        using (var kapsam = _fabrika.Services.CreateScope())
+        {
+            var db = kapsam.ServiceProvider.GetRequiredService<LibraryContext>();
+            var kitap = await db.Books.FindAsync(id);
+            kitap!.IsCheckedOut = true;
+            kitap.CheckedOutBy = "Geç Kalan";
+            kitap.DueDate = son;
+            await db.SaveChangesAsync();
+        }
+
+        var tatilsiz = LoanCalculator.LateBusinessDays(son, DateTime.Now);
+        var tatilli = LoanCalculator.LateBusinessDays(son, DateTime.Now, Fabrika.TatilKumesi);
+        Assert.Equal(tatilsiz - 1, tatilli); // yapılandırılan tatil, ceza gününü bir azaltır
+
+        var yanit = await _istemci.GetFromJsonAsync<JsonElement>($"/api/books/{id}/fine-preview");
+        Assert.Equal(tatilli, yanit.GetProperty("lateDays").GetInt32());
+        Assert.Equal(tatilli * 5m, yanit.GetProperty("fine").GetDecimal());
+    }
+
+    [Fact]
+    public async Task CezaOnizleme_OduncteOlmayanKitapIcin400_OlmayanIcin404()
+    {
+        var id = await KitapEkle();
+        Assert.Equal(HttpStatusCode.BadRequest, (await _istemci.GetAsync($"/api/books/{id}/fine-preview")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await _istemci.GetAsync("/api/books/99999/fine-preview")).StatusCode);
     }
 
     [Fact]
