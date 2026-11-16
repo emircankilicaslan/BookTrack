@@ -1,0 +1,32 @@
+# Tek komutla çalıştırma:  docker compose up --build
+# Arayüz: http://localhost:8080   ·   Swagger: http://localhost:8080/swagger
+# Parola yalnızca yerel deneme içindir; gerçek ortamda .env dosyasından veya gizli yönetiminden verin.
+services:
+  sql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:-Yerel-Deneme-Parola-1!}
+    volumes:
+      - sqldata:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q 'SELECT 1' || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  api:
+    build: .
+    depends_on:
+      sql:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      ConnectionStrings__DefaultConnection: "Server=sql,1433;Database=LibraryDb;User Id=sa;Password=${MSSQL_SA_PASSWORD:-Yerel-Deneme-Parola-1!};TrustServerCertificate=True;MultipleActiveResultSets=true"
+      Database__MigrateOnStartup: "true"
+      Swagger__Enabled: "true"
+      HttpsRedirection__Enabled: "false"
+
+volumes:
+  sqldata:

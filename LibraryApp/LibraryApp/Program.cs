@@ -14,6 +14,14 @@ builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
+// Docker/CI için isteğe bağlı: Database:MigrateOnStartup=true ise bekleyen migration'lar açılışta uygulanır.
+// Varsayılan kapalıdır; üretimde migration'lar bilinçli olarak (dotnet ef database update) çalıştırılır.
+if (app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
+{
+    using var scope = app.Services.CreateScope();
+    await scope.ServiceProvider.GetRequiredService<LibraryContext>().Database.MigrateAsync();
+}
+
 // Güvenlik başlıkları. Web arayüzü yalnızca kendi kaynaklarını yükler; Swagger UI satır içi betik kullandığı için kapsam dışı.
 app.Use(async (ctx, next) =>
 {
@@ -27,13 +35,14 @@ app.Use(async (ctx, next) =>
 });
 
 // Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Swagger:Enabled"))
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+// Konteynerde TLS genellikle önündeki ters vekilde sonlanır; HttpsRedirection:Enabled=false ile kapatılabilir.
+if (app.Configuration.GetValue("HttpsRedirection:Enabled", true)) app.UseHttpsRedirection();
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseAuthorization();
