@@ -8,6 +8,64 @@ API ile birlikte gelen web arayüzü (`/`) katalog, ödünç verme, iade ve geç
 
 ![Katalog ve durum özeti](docs/screenshots/arayuz-katalog.jpg)
 
+## Proje amacı ve çözdüğü problem
+Küçük ve orta ölçekli kütüphanelerde (okul, kurum içi arşiv, zimmet benzeri envanter) kitap kimde, ne zaman teslim edilmeli ve gecikmenin bedeli ne kadar sorularının tek yerden, tutarlı yanıtlanması gerekir. BookTrack bunu şu kurallarla sağlar: ödünç süresi ve gecikme cezası **iş günü ve resmi tatile göre** hesaplanır, aynı kitap **aynı anda iki kişiye verilemez** (eş zamanlılık veritabanı düzeyinde korunur) ve **ödünç geçmişi silinemez** (yabancı anahtar ve benzersiz ISBN ile veri bütünlüğü).
+
+## Hızlı başlangıç (Docker)
+Gereksinim: Docker. Tek komutla SQL Server ve API ayağa kalkar, migration'lar otomatik uygulanır:
+```bash
+docker compose up --build
+```
+Arayüz: http://localhost:8080 · Swagger: http://localhost:8080/swagger. Parola yerel denemeye yöneliktir; `MSSQL_SA_PASSWORD` ortam değişkeniyle değiştirilebilir. Veri `sqldata` birimi içinde kalıcıdır (`docker compose down -v` siler).
+
+Docker yerine yerelde çalıştırmak için aşağıdaki [Çalıştırma](#çalıştırma) bölümüne bakın.
+
+## Mimari ve teknoloji yığını
+| Katman / bileşen | Seçim | Neden |
+|---|---|---|
+| API | ASP.NET Core 8 Web API (`Controllers/BooksController`) | Kurumsal ortamlarda yaygın, uzun süreli destekli (LTS) çalışma zamanı |
+| İş kuralları | `Services/LoanCalculator` (saf, durumsuz sınıf) | Teslim tarihi, gecikme günü ve ceza hesabı veritabanına ve HTTP'ye bağlı değildir; birim testle doğrudan sınanır |
+| Veri erişimi | Entity Framework Core 8 + migration'lar | Şema sürümlenir; geçişler tekrarlanabilir ve testlerde gerçek SQL Server'a karşı doğrulanır |
+| Veritabanı | SQL Server (rowversion, unique index, yabancı anahtar) | Eş zamanlılık ve veri bütünlüğü kısıtları veritabanında zorlanır, yalnızca uygulama koduna bırakılmaz |
+| Doğrulama | Veri açıklamaları + `TcknDogrulayici` | Girdi hataları 400, çakışmalar 409 ile ayrışır |
+| Arayüz | Sade HTML/CSS/JS (`wwwroot`), derleme adımı yok | Harici bağımlılık yok; CSP ile satır içi betik/stil kullanılmaz |
+| Test | xUnit, `WebApplicationFactory`, gerçek SQL Server testleri | Bellek içi sağlayıcının üretemediği davranışlar (çakışma, kısıtlar, migration) gerçek veritabanında sınanır |
+| CI / dağıtım | GitHub Actions (SQL Server servisiyle), Dockerfile + docker-compose | Her push ve PR'da derleme ve tüm testler; tek komutla çalıştırma |
+
+Proje tek bir web projesi ve ayrı bir test projesinden oluşur (`LibraryApp`, `LibraryApp.Tests`). İş mantığı denetleyiciden `Services` altına ayrılmıştır; ancak depo (repository) veya uygulama katmanı yoktur, denetleyici `DbContext`'i doğrudan kullanır. Proje büyürse sıradaki adım bu ayrımın katmanlara bölünmesidir (bkz. [Bilinen sınırlar](#bilinen-sınırlar)).
+
+## Veritabanı şeması
+```mermaid
+erDiagram
+    Books ||--o{ CheckOuts : "ödünç geçmişi (FK, silme: Restrict)"
+    Books {
+        int Id PK
+        nvarchar300 Title
+        nvarchar20 ISBN UK "benzersiz"
+        int PublicationYear
+        decimal18_2 Price
+        bit IsCheckedOut
+        nvarchar CheckedOutBy
+        datetime2 CheckOutDate
+        datetime2 DueDate
+        rowversion RowVersion "eş zamanlılık denetimi"
+    }
+    CheckOuts {
+        int Id PK
+        int BookId FK
+        nvarchar100 Name
+        nvarchar20 PhoneNumber
+        nvarchar11 TCKN "sağlama algoritmasıyla doğrulanır"
+        datetime2 CheckOutDate
+        datetime2 DueDate
+        datetime2 ActualReturnDate "null = henüz iade edilmedi"
+    }
+```
+`CheckOuts_Yetim`, `VeriButunlugu` migration'ı sırasında kitabı silinmiş eski kayıtların taşındığı arşiv tablosudur (yalnızca eski veritabanlarında oluşur).
+
+## API belgeleri (Swagger)
+![Swagger arayüzü](docs/screenshots/swagger.jpg)
+
 ## Web arayüzü
 Dosyalar `LibraryApp/LibraryApp/wwwroot` altındadır (sade HTML, CSS ve JavaScript; derleme adımı ve harici bağımlılık yok).
 
@@ -72,7 +130,7 @@ dotnet test LibraryApp/LibraryApp.sln
 GitHub Actions her push ve pull request'te bir SQL Server servisiyle derleme ve tüm testleri çalıştırır.
 
 ## Bilinen sınırlar
-Kimlik doğrulama yok (arayüz ve API herkese açıktır; yalnızca güvenli bir ağda çalıştırın); dini bayram tarihleri her yıl değiştiği için resmi tatil listesi yılbaşında güncellenmelidir. TCKN kişisel veridir: üretimde saklama/şifreleme politikası gerekir.
+Kimlik doğrulama, rol bazlı yetkilendirme ve denetim kaydı (audit log) yok (arayüz ve API herkese açıktır; yalnızca güvenli bir ağda çalıştırın); denetleyici veri erişimini doğrudan `DbContext` ile yapar, ayrı repository/uygulama katmanı yoktur; dini bayram tarihleri her yıl değiştiği için resmi tatil listesi yılbaşında güncellenmelidir. TCKN kişisel veridir: üretimde saklama/şifreleme politikası gerekir.
 
 ## Mevcut veritabanını güncelleme (`VeriButunlugu` migration'ı)
 `dotnet ef database update` ISBN benzersizliği, `CheckOut` → `Book` yabancı anahtarı ve alan uzunluklarını (başlık 300, ISBN 20) ekler. Eski veriyle güvenli çalışır:
