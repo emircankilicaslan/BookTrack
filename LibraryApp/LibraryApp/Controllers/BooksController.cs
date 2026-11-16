@@ -1,14 +1,20 @@
 using LibraryApp.Data;
 using LibraryApp.Models;
 using LibraryApp.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 namespace LibraryApp.Controllers
 {
+    /// <summary>
+    /// Tüm uç noktalar giriş gerektirir. Admin ve Librarian kitap ekleyebilir/düzenleyebilir, ödünç verip iade alabilir;
+    /// kitap silme yalnızca Admin'e açıktır.
+    /// </summary>
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize(Roles = $"{Roles.Admin},{Roles.Librarian}")]
     public class BooksController : ControllerBase
     {
         private const string IsbnVar = "Bu ISBN ile kayıtlı başka bir kitap zaten var.";
@@ -119,6 +125,7 @@ namespace LibraryApp.Controllers
 
         // Kitap sil (DELETE metodu)
         [HttpDelete("{id}")]
+        [Authorize(Roles = Roles.Admin)]
         public async Task<IActionResult> DeleteBook(int id)
         {
             var book = await _context.Books.FindAsync(id);

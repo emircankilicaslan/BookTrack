@@ -1,6 +1,30 @@
 @LibraryApp_HostAddress = http://localhost:5210
 
-GET {{LibraryApp_HostAddress}}/weatherforecast/
-Accept: application/json
+### Oturum aç: yanıttaki token'ı aşağıdaki {{token}} değişkenine yazın (Auth__AdminUsername / Auth__AdminPassword ile oluşan yönetici)
+POST {{LibraryApp_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "yonetici", "password": "<ADMIN_PASSWORD>" }
+
+###
+@token = <login yanıtındaki token>
+
+### Kitapları listele
+GET {{LibraryApp_HostAddress}}/api/books
+Authorization: Bearer {{token}}
+
+### Kitap ekle (Admin veya Librarian)
+POST {{LibraryApp_HostAddress}}/api/books
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "title": "Suç ve Ceza", "isbn": "978-605-0000-001-1", "publicationYear": 1866, "price": 185 }
+
+### Kullanıcı ekle (yalnızca Admin; rol: Admin veya Librarian)
+POST {{LibraryApp_HostAddress}}/api/users
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "username": "gorevli1", "password": "<en-az-8-karakter>", "role": "Librarian" }
 
 ###

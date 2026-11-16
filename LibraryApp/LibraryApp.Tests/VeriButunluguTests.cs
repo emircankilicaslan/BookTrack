@@ -10,7 +10,7 @@ public class VeriButunluguTests : IClassFixture<BooksApiTests.Fabrika>
 {
     private readonly HttpClient _istemci;
 
-    public VeriButunluguTests(BooksApiTests.Fabrika fabrika) => _istemci = fabrika.CreateClient();
+    public VeriButunluguTests(BooksApiTests.Fabrika fabrika) => _istemci = TestAuth.Admin(fabrika);
 
     private static string YeniIsbn() => ("978-" + Guid.NewGuid().ToString("N"))[..20];
 

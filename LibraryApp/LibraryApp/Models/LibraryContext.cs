@@ -16,9 +16,14 @@ namespace LibraryApp.Data
 
         public DbSet<Book> Books { get; set; }
         public DbSet<CheckOut> CheckOuts { get; set; }
+        public DbSet<AppUser> Users { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            modelBuilder.Entity<AppUser>()
+                .HasIndex(u => u.Username)
+                .IsUnique();
+
             modelBuilder.Entity<Book>()
                 .Property(b => b.Price)
                 .HasColumnType("decimal(18, 2)");

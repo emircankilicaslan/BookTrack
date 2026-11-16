@@ -41,10 +41,12 @@ public sealed class SqlConcurrencyTests : IAsyncLifetime
         {
             b.UseEnvironment("Development");
             b.UseSetting("ConnectionStrings:DefaultConnection", cs);
+            b.UseSetting("Database:MigrateOnStartup", "true"); // ilk yönetici oluşturulmadan önce şema kurulur
+            TestAuth.Configure(b);
         });
         using (var kapsam = _fabrika.Services.CreateScope())
             await kapsam.ServiceProvider.GetRequiredService<LibraryContext>().Database.MigrateAsync();
-        _istemci = _fabrika.CreateClient();
+        _istemci = await TestAuth.AdminAsync(_fabrika);
     }
 
     public async Task DisposeAsync()

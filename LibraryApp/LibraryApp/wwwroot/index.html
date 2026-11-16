@@ -9,11 +9,32 @@
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
+  <!-- Giriş: kayıt yoktur, hesapları yönetici açar -->
+  <div id="giris" class="giris" hidden>
+    <form id="giris-form" class="kart giris-kart" autocomplete="on">
+      <div class="logo"><span class="logo-isaret" aria-hidden="true"></span> BookTrack</div>
+      <h1>Giriş yap</h1>
+      <p class="soluk">Kütüphane görevlisi hesabınla devam et.</p>
+      <label>Kullanıcı adı
+        <input name="username" autocomplete="username" required maxlength="50">
+      </label>
+      <label>Parola
+        <input name="password" type="password" autocomplete="current-password" required maxlength="100">
+      </label>
+      <p class="bildirim hata" id="giris-hata" role="alert" hidden></p>
+      <button class="dugme birincil" type="submit" id="giris-gonder">Giriş yap</button>
+    </form>
+  </div>
+
+  <div id="uygulama" hidden>
   <header class="ust">
     <div class="ust-ic">
       <div class="logo"><span class="logo-isaret" aria-hidden="true"></span> BookTrack</div>
       <p class="soluk ust-metin">Kütüphane ödünç takibi</p>
+      <span class="kullanici soluk" id="kullanici"></span>
+      <button id="kullanicilar-ac" class="dugme ikincil" hidden>Kullanıcılar</button>
       <button id="kitap-ekle" class="dugme birincil">+ Kitap ekle</button>
+      <button id="cikis" class="dugme ikincil">Çıkış</button>
     </div>
   </header>
 
@@ -47,6 +68,7 @@
       </div>
     </section>
   </main>
+  </div>
 
   <dialog id="dialog"><div id="dialog-icerik" class="dialog-icerik"></div></dialog>
   <script src="app.js" defer></script>
