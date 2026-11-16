@@ -21,13 +21,13 @@ for (const [i, [title, publicationYear, price]] of kitaplar.entries())
   id.push((await api('/api/books', 'POST', { title, isbn: `978-605-0000-${String(i + 1).padStart(3, '0')}-${i % 10}`, publicationYear, price })).id);
 
 const okuyucular = [
-  ['Ayşe Yılmaz', '05321112233', '10000000146'], ['Mehmet Kaya', '05334445566', '10000000278'], ['Zeynep Demir', null, '10000000392'],
-  ['Can Öztürk', '05427778899', '10000000414'], ['Elif Şahin', null, '10000000536'],
+  ['Ayşe Yılmaz', '05321112233', '10000000146'], ['Mehmet Kaya', '05334445566', '10000000214'], ['Zeynep Demir', null, '10000000382'],
+  ['Can Öztürk', '05427778899', '10000000450'], ['Elif Şahin', null, '10000000528'],
 ];
 for (const [k, [name, phoneNumber, tckn]] of [[0, okuyucular[0]], [2, okuyucular[1]], [5, okuyucular[2]], [7, okuyucular[3]], [9, okuyucular[4]]])
   await api(`/api/books/checkout/${id[k]}`, 'POST', { name, phoneNumber, tckn });
 
 // Bir kitap ödünç verilip iade edilir (geçmişte kayıt oluşsun).
-await api(`/api/books/checkout/${id[3]}`, 'POST', { name: 'Burak Arslan', phoneNumber: null, tckn: '10000000650' });
+await api(`/api/books/checkout/${id[3]}`, 'POST', { name: 'Burak Arslan', phoneNumber: null, tckn: '10000000696' });
 await api(`/api/books/checkin/${id[3]}`, 'POST');
 console.log(`tamam: ${id.length} kitap`);

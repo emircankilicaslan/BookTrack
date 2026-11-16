@@ -21,6 +21,15 @@ function h(etiket, ozellikler = {}, ...cocuklar) {
 }
 
 const para = (n) => Number(n).toLocaleString("tr-TR", { style: "currency", currency: "TRY" });
+
+// T.C. kimlik no sağlama algoritması (sunucudaki TcknDogrulayici ile aynı kural; sunucu yine de denetler).
+function tcknGecerli(t) {
+  if (!/^[0-9]{11}$/.test(t) || t[0] === "0") return false;
+  const d = [...t].map(Number);
+  const tek = d[0] + d[2] + d[4] + d[6] + d[8], cift = d[1] + d[3] + d[5] + d[7];
+  if (((tek * 7 - cift) % 10 + 10) % 10 !== d[9]) return false;
+  return d.slice(0, 10).reduce((a, b) => a + b, 0) % 10 === d[10];
+}
 const tarih = (s) => (s ? new Date(s).toLocaleDateString("tr-TR", { day: "numeric", month: "short", year: "numeric" }) : "–");
 const tarihSaat = (s) => (s ? new Date(s).toLocaleString("tr-TR", { dateStyle: "medium", timeStyle: "short" }) : "–");
 
@@ -180,8 +189,8 @@ function kitapDialogu(k) {
   formPenceresi({
     baslik: yeni ? "Kitap ekle" : "Kitabı düzenle", onay: yeni ? "Ekle" : "Kaydet",
     alanlar: [
-      alan("Başlık", h("input", { name: "title", required: true, value: k?.title ?? "" }), true),
-      alan("ISBN", h("input", { name: "isbn", required: true, value: k?.isbn ?? "", placeholder: "978-..." })),
+      alan("Başlık", h("input", { name: "title", required: true, maxlength: "300", value: k?.title ?? "" }), true),
+      alan("ISBN", h("input", { name: "isbn", required: true, maxlength: "20", value: k?.isbn ?? "", placeholder: "978-..." })),
       alan("Yayın yılı", h("input", { name: "year", type: "number", min: "1000", max: "2100", required: true, value: k?.publicationYear ?? new Date().getFullYear() })),
       alan("Fiyat (₺)", h("input", { name: "price", type: "number", min: "0", step: "0.01", required: true, value: k?.price ?? "" })),
     ],
@@ -210,6 +219,7 @@ function oduncDialogu(k) {
       const tckn = f.get("tckn").trim();
       if (!f.get("name").trim()) throw new ApiHatasi("Ad soyad zorunludur.");
       if (!/^\d{11}$/.test(tckn)) throw new ApiHatasi("T.C. kimlik numarası 11 haneli olmalıdır.");
+      if (!tcknGecerli(tckn)) throw new ApiHatasi("Geçerli bir T.C. kimlik numarası giriniz.");
       await api(`/api/books/checkout/${k.id}`, { yontem: "POST", govde: { name: f.get("name").trim(), phoneNumber: f.get("phone").trim() || null, tckn } });
       kapat();
       duyur("basari", `“${k.title}” ödünç verildi.`);

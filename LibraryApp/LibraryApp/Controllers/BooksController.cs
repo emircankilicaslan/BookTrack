@@ -11,6 +11,8 @@ namespace LibraryApp.Controllers
     [ApiController]
     public class BooksController : ControllerBase
     {
+        private const string IsbnVar = "Bu ISBN ile kayıtlı başka bir kitap zaten var.";
+
         private readonly LibraryContext _context;
         private readonly IReadOnlySet<DateOnly> _holidays;
 
@@ -61,9 +63,24 @@ namespace LibraryApp.Controllers
             newBook.CheckedOutBy = null;
             newBook.CheckOutDate = null;
             newBook.DueDate = null;
+            newBook.ISBN = newBook.ISBN.Trim();
+
+            if (await _context.Books.AnyAsync(b => b.ISBN == newBook.ISBN))
+                return Conflict(new { message = IsbnVar });
 
             _context.Books.Add(newBook);
-            await _context.SaveChangesAsync();
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateException)
+            {
+                // Denetim ile kayıt arasında aynı ISBN başka bir istekle eklendiyse unique index yakalar.
+                _context.ChangeTracker.Clear();
+                if (await _context.Books.AsNoTracking().AnyAsync(b => b.ISBN == newBook.ISBN))
+                    return Conflict(new { message = IsbnVar });
+                throw;
+            }
             return CreatedAtAction(nameof(GetBook), new { id = newBook.Id }, newBook);
         }
 
@@ -77,12 +94,26 @@ namespace LibraryApp.Controllers
             var book = await _context.Books.FindAsync(id);
             if (book == null) return NotFound();
 
+            var isbn = updatedBook.ISBN.Trim();
+            if (await _context.Books.AnyAsync(b => b.ISBN == isbn && b.Id != id))
+                return Conflict(new { message = IsbnVar });
+
             book.Title = updatedBook.Title;
-            book.ISBN = updatedBook.ISBN;
+            book.ISBN = isbn;
             book.PublicationYear = updatedBook.PublicationYear;
             book.Price = updatedBook.Price;
 
-            if (!await TrySaveAsync()) return Conflict(new { message = "Kitap aynı anda başka bir işlemle değiştirildi. Güncel durumu görmek için yenileyin." });
+            try
+            {
+                if (!await TrySaveAsync()) return Conflict(new { message = "Kitap aynı anda başka bir işlemle değiştirildi. Güncel durumu görmek için yenileyin." });
+            }
+            catch (DbUpdateException)
+            {
+                _context.ChangeTracker.Clear();
+                if (await _context.Books.AsNoTracking().AnyAsync(b => b.ISBN == isbn && b.Id != id))
+                    return Conflict(new { message = IsbnVar });
+                throw;
+            }
             return NoContent();
         }
 
@@ -94,6 +125,8 @@ namespace LibraryApp.Controllers
             if (book == null) return NotFound();
             if (book.IsCheckedOut)
                 return Conflict(new { message = "Ödünçte olan kitap silinemez; önce iade alınmalıdır." });
+            if (await _context.CheckOuts.AnyAsync(c => c.BookId == id))
+                return Conflict(new { message = "Ödünç geçmişi olan kitap silinemez; geçmiş kayıtları korunur." });
 
             _context.Books.Remove(book);
             if (!await TrySaveAsync()) return Conflict(new { message = "Kitap aynı anda başka bir işlemle değiştirildi. Güncel durumu görmek için yenileyin." });

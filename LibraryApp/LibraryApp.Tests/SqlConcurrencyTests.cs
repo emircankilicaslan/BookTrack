@@ -61,13 +61,13 @@ public sealed class SqlConcurrencyTests : IAsyncLifetime
 
     private async Task<int> KitapEkle(string ad)
     {
-        var r = await _istemci.PostAsJsonAsync("/api/books", new { title = ad, isbn = "978-1", publicationYear = 2000, price = 10 });
+        var r = await _istemci.PostAsJsonAsync("/api/books", new { title = ad, isbn = ("978-" + Guid.NewGuid().ToString("N"))[..20], publicationYear = 2000, price = 10 });
         Assert.Equal(HttpStatusCode.Created, r.StatusCode);
         return (await r.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
     }
 
     private Task<HttpResponseMessage> Odunc(int id, int kisi) =>
-        _istemci.PostAsJsonAsync($"/api/books/checkout/{id}", new { name = $"Kişi {kisi}", tckn = "12345678901" });
+        _istemci.PostAsJsonAsync($"/api/books/checkout/{id}", new { name = $"Kişi {kisi}", tckn = "10000000146" });
 
     private async Task<int> GecmisSayisi(int id) =>
         (await _istemci.GetFromJsonAsync<JsonElement>($"/api/books/{id}/history")).GetArrayLength();

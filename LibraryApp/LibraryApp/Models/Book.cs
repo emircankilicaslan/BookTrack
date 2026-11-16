@@ -8,9 +8,11 @@ namespace LibraryApp.Models
         public int Id { get; set; }
 
         [Required(AllowEmptyStrings = false, ErrorMessage = "Başlık zorunludur.")]
+        [StringLength(300, ErrorMessage = "Başlık en fazla 300 karakter olabilir.")]
         public string Title { get; set; } = string.Empty;
 
         [Required(AllowEmptyStrings = false, ErrorMessage = "ISBN zorunludur.")]
+        [StringLength(20, ErrorMessage = "ISBN en fazla 20 karakter olabilir.")]
         public string ISBN { get; set; } = string.Empty;
 
         [Range(1000, 2100, ErrorMessage = "Yayın yılı 1000 ile 2100 arasında olmalıdır.")]
