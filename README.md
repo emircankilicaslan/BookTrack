@@ -29,10 +29,10 @@ Güvenlik: metinler `textContent` ile yazılır (`innerHTML` yok), sayfa `Conten
 | ![Geciken](docs/screenshots/arayuz-geciken.jpg) | ![Geçmiş](docs/screenshots/arayuz-gecmis.jpg) | <img src="docs/screenshots/arayuz-mobil.jpg" width="200" alt="Mobil görünüm"> |
 
 ## Özellikler
-- Kitap CRUD (`/api/books`); girdiler doğrulanır (başlık ve ISBN zorunlu, yayın yılı 1000–2100, fiyat ≥ 0)
+- Kitap CRUD (`/api/books`); girdiler doğrulanır (başlık ve ISBN zorunlu, başlık en fazla 300, ISBN en fazla 20 karakter, yayın yılı 1000–2100, fiyat ≥ 0). **ISBN benzersizdir**: aynı ISBN ile ikinci kitap eklenemez veya güncellenemez (409). **Ödünç geçmişi olan kitap silinemez** (409); kayıtlar `CheckOut` → `Book` yabancı anahtarıyla bağlıdır ve geçmiş korunur
 - **Ödünç verme** (`POST /api/books/checkout/{id}`): kitap zaten ödünçteyse reddedilir, teslim tarihi **15 iş günü** sonrası olarak hesaplanır (hafta sonları sayılmaz)
 - **İade** (`POST /api/books/checkin/{id}`): gecikme iş günü sayısı üzerinden **günlük 5 ₺ ceza** hesaplanır; yanıtta `lateDays` ve `fine` alanları da döner. Son teslim günü içindeki iade zamanında sayılır; hafta sonları ve resmi tatiller ne teslim süresine ne de cezaya dahil edilir
-- Ödünç kaydı (CheckOut) geçmişi tutulur; girdiler doğrulanır (TCKN 11 hane, ad zorunlu)
+- Ödünç kaydı (CheckOut) geçmişi tutulur; girdiler doğrulanır (ad zorunlu, T.C. kimlik no 11 hane ve resmi sağlama algoritmasına uygun olmalı)
 - EF Core migration'ları, Swagger UI (geliştirme ortamında)
 
 ## Uç noktalar
@@ -57,14 +57,14 @@ dotnet run                     # Arayüz: http://localhost:5210  ·  Swagger: /s
 Örnek kitap ve ödünç kayıtlarıyla denemek için uygulama çalışırken: `node scripts/demo-verisi.mjs` (Node 18+; ISBN'ler örnek değerlerdir).
 
 ```bash
-dotnet test LibraryApp/LibraryApp.sln   # 37 test (SQL Server testleri BOOKTRACK_TEST_SQL tanımlı değilse atlanır)
+dotnet test LibraryApp/LibraryApp.sln   # 63 test (SQL Server testleri BOOKTRACK_TEST_SQL tanımlı değilse atlanır)
 ```
 **Resmi tatiller** `appsettings.json` içindeki `Library:Holidays` listesinden okunur (yyyy-MM-dd); 2026 tatilleri tanımlıdır. Listede olmayan bir yıl için tatiller iş günü sayılır, bu yüzden her yıl başında güncelleyin.
 
 Farklı bir SQL Server için `ConnectionStrings:DefaultConnection` değerini değiştirin.
 
 ## Testler
-xUnit ile 37 test: ödünç süresi ve gecikme hesabı (hafta sonu, resmi tatil ve sınır durumları, `LoanCalculator`), kitap doğrulaması, ödünç verme/iade akışı, gecikme cezası, ödünçteki kitabın silinememesi, geçmiş uç noktasının kişisel veri sızdırmaması ve arayüzün güvenlik başlıkları (`WebApplicationFactory` + bellek içi veritabanı). **Eş zamanlılık:** aynı kitap aynı anda birden fazla kişiye ödünç verilemez. `Book` kaydında SQL Server `rowversion` sütunu vardır; çakışan istekten yalnızca biri başarılı olur, diğeri 409 (veya kitap artık ödünçte olduğu için 400) alır ve reddedilen isteğin ödünç kaydı yazılmaz. Bu davranış bellek içi sağlayıcıyla üretilemediği için gerçek SQL Server'a karşı test edilir (3 test, her biri kendi geçici veritabanını kurar ve siler):
+xUnit ile 63 test: ödünç süresi ve gecikme hesabı (hafta sonu, resmi tatil ve sınır durumları, `LoanCalculator`), kitap doğrulaması, ödünç verme/iade akışı, gecikme cezası, ödünçteki ve geçmişi olan kitabın silinememesi, ISBN tekrarı, alan uzunlukları, T.C. kimlik no algoritması, geçmiş uç noktasının kişisel veri sızdırmaması ve arayüzün güvenlik başlıkları (`WebApplicationFactory` + bellek içi veritabanı). **Eş zamanlılık:** aynı kitap aynı anda birden fazla kişiye ödünç verilemez. `Book` kaydında SQL Server `rowversion` sütunu vardır; çakışan istekten yalnızca biri başarılı olur, diğeri 409 (veya kitap artık ödünçte olduğu için 400) alır ve reddedilen isteğin ödünç kaydı yazılmaz. Bu davranış, unique index, yabancı anahtar ve veri taşıyan migration bellek içi sağlayıcıyla üretilemediği için gerçek SQL Server'a karşı test edilir (9 test, her biri kendi geçici veritabanını kurar ve siler):
 ```powershell
 $env:BOOKTRACK_TEST_SQL = 'Server=(localdb)mssqllocaldb;Integrated Security=true;TrustServerCertificate=True'
 dotnet test LibraryApp/LibraryApp.sln
@@ -74,7 +74,15 @@ GitHub Actions her push ve pull request'te bir SQL Server servisiyle derleme ve 
 ## Bilinen sınırlar
 Kimlik doğrulama yok (arayüz ve API herkese açıktır; yalnızca güvenli bir ağda çalıştırın); dini bayram tarihleri her yıl değiştiği için resmi tatil listesi yılbaşında güncellenmelidir. TCKN kişisel veridir: üretimde saklama/şifreleme politikası gerekir.
 
-Bilinen veri bütünlüğü eksikleri: ISBN tekrarı engellenmez; ödünç kayıtları kitaba veritabanı ilişkisiyle bağlı değildir, bu yüzden geçmişi olan bir kitap silinirse kayıtları yetim kalır ve geçmiş görüntülenemez; T.C. kimlik numarası yalnızca 11 hane olarak doğrulanır (sağlama algoritması denetlenmez); başlık ve ISBN için uzunluk sınırı yoktur.
+## Mevcut veritabanını güncelleme (`VeriButunlugu` migration'ı)
+`dotnet ef database update` ISBN benzersizliği, `CheckOut` → `Book` yabancı anahtarı ve alan uzunluklarını (başlık 300, ISBN 20) ekler. Eski veriyle güvenli çalışır:
+- **Kitabı silinmiş (yetim) ödünç kayıtları** silinmez; `CheckOuts_Yetim` tablosuna taşınır, gerekirse oradan incelenebilir.
+- **Tekrar eden ISBN** veya **limiti aşan başlık/ISBN** varsa migration, düzeltme sorgusunu içeren açık bir hata ile durur ve hiçbir şey değiştirmez. Önce kayıtları düzeltin, sonra yeniden çalıştırın:
+```sql
+SELECT ISBN, COUNT(*) FROM Books GROUP BY ISBN HAVING COUNT(*) > 1;
+SELECT Id, LEN(Title), LEN(ISBN) FROM Books WHERE LEN(Title) > 300 OR LEN(ISBN) > 20;
+```
+Not: TCKN algoritması yalnızca yeni ödünç işlemlerini denetler; mevcut kayıtlar değiştirilmez.
 
 ---
 *Geliştirici: Emircan Kılıçaslan*

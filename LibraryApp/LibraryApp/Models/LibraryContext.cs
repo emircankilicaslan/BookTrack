@@ -27,7 +27,17 @@ namespace LibraryApp.Data
                 .Property(b => b.RowVersion)
                 .IsRowVersion();
 
-           
+            // ISBN tekrarı veritabanı düzeyinde de engellenir (denetleyici ayrıca anlaşılır 409 döner).
+            modelBuilder.Entity<Book>()
+                .HasIndex(b => b.ISBN)
+                .IsUnique();
+
+            // Ödünç kaydı kitaba bağlıdır; geçmişi olan kitap silinemez (Restrict), kayıtlar yetim kalmaz.
+            modelBuilder.Entity<CheckOut>()
+                .HasOne(c => c.Book)
+                .WithMany()
+                .HasForeignKey(c => c.BookId)
+                .OnDelete(DeleteBehavior.Restrict);
         }
     }
 }

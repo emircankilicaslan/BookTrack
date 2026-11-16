@@ -50,8 +50,10 @@ public class BooksApiTests : IClassFixture<BooksApiTests.Fabrika>
         _istemci = fabrika.CreateClient();
     }
 
-    private static object Kitap(string baslik = "Suç ve Ceza", int yil = 1866, decimal fiyat = 120m) =>
-        new { title = baslik, isbn = "978-975-07-0000-0", publicationYear = yil, price = fiyat };
+    private static string YeniIsbn() => ("978-" + Guid.NewGuid().ToString("N"))[..20];
+
+    private static object Kitap(string baslik = "Suç ve Ceza", int yil = 1866, decimal fiyat = 120m, string? isbn = null) =>
+        new { title = baslik, isbn = isbn ?? YeniIsbn(), publicationYear = yil, price = fiyat };
 
     private async Task<int> KitapEkle(object? kitap = null)
     {
@@ -60,7 +62,7 @@ public class BooksApiTests : IClassFixture<BooksApiTests.Fabrika>
         return (await r.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetInt32();
     }
 
-    private static readonly object Okuyucu = new { name = "Ayşe Yılmaz", phoneNumber = "05550000000", tckn = "12345678901" };
+    private static readonly object Okuyucu = new { name = "Ayşe Yılmaz", phoneNumber = "05550000000", tckn = "10000000146" };
 
     [Fact]
     public async Task KitapEkle_VeListele()
@@ -112,7 +114,8 @@ public class BooksApiTests : IClassFixture<BooksApiTests.Fabrika>
     }
 
     [Theory]
-    [InlineData("", "12345678901")]            // ad yok
+    [InlineData("", "10000000146")]            // ad yok
+    [InlineData("Ayşe", "11111111111")]        // 11 hane ama sağlama algoritmasına uymuyor
     [InlineData("Ayşe", "123")]                // TCKN kısa
     [InlineData("Ayşe", "1234567890a")]        // TCKN rakam değil
     public async Task OduncVer_GecersizOkuyucu_400Doner(string ad, string tckn)
@@ -131,8 +134,9 @@ public class BooksApiTests : IClassFixture<BooksApiTests.Fabrika>
         Assert.Equal(HttpStatusCode.Conflict, (await _istemci.DeleteAsync($"/api/books/{id}")).StatusCode);
 
         await _istemci.PostAsync($"/api/books/checkin/{id}", null);
-        Assert.Equal(HttpStatusCode.NoContent, (await _istemci.DeleteAsync($"/api/books/{id}")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await _istemci.GetAsync($"/api/books/{id}")).StatusCode);
+        // İade sonrası da geçmişi olduğu için silinemez (Issue #4); geçmiş korunur.
+        Assert.Equal(HttpStatusCode.Conflict, (await _istemci.DeleteAsync($"/api/books/{id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await _istemci.GetAsync($"/api/books/{id}/history")).StatusCode);
     }
 
     [Fact]
@@ -148,7 +152,7 @@ public class BooksApiTests : IClassFixture<BooksApiTests.Fabrika>
             kitap!.IsCheckedOut = true;
             kitap.CheckedOutBy = "Geç Kalan";
             kitap.DueDate = son;
-            db.CheckOuts.Add(new CheckOut { BookId = id, Name = "Geç Kalan", TCKN = "12345678901", CheckOutDate = son.AddDays(-21), DueDate = son });
+            db.CheckOuts.Add(new CheckOut { BookId = id, Name = "Geç Kalan", TCKN = "10000000146", CheckOutDate = son.AddDays(-21), DueDate = son });
             await db.SaveChangesAsync();
         }
 
@@ -201,15 +205,15 @@ public class BooksApiTests : IClassFixture<BooksApiTests.Fabrika>
         await _istemci.PostAsJsonAsync($"/api/books/checkout/{id}", Okuyucu);
         await _istemci.PostAsync($"/api/books/checkin/{id}", null);
         await Task.Delay(20); // sıralama için farklı zaman damgası
-        await _istemci.PostAsJsonAsync($"/api/books/checkout/{id}", new { name = "Mehmet Kaya", tckn = "98765432109" });
+        await _istemci.PostAsJsonAsync($"/api/books/checkout/{id}", new { name = "Mehmet Kaya", tckn = "10000000214" });
 
         var ham = await _istemci.GetStringAsync($"/api/books/{id}/history");
         var liste = JsonSerializer.Deserialize<List<JsonElement>>(ham)!;
 
         Assert.Equal(2, liste.Count);
         Assert.Equal("Mehmet Kaya", liste[0].GetProperty("name").GetString());
-        Assert.DoesNotContain("12345678901", ham);
-        Assert.DoesNotContain("98765432109", ham);
+        Assert.DoesNotContain("10000000146", ham);
+        Assert.DoesNotContain("10000000214", ham);
         Assert.DoesNotContain("tckn", ham, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("phone", ham, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(HttpStatusCode.NotFound, (await _istemci.GetAsync("/api/books/99999/history")).StatusCode);
