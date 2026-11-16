@@ -12,11 +12,12 @@ API ile birlikte gelen web arayüzü (`/`) katalog, ödünç verme, iade ve geç
 Küçük ve orta ölçekli kütüphanelerde (okul, kurum içi arşiv, zimmet benzeri envanter) kitap kimde, ne zaman teslim edilmeli ve gecikmenin bedeli ne kadar sorularının tek yerden, tutarlı yanıtlanması gerekir. BookTrack bunu şu kurallarla sağlar: ödünç süresi ve gecikme cezası **iş günü ve resmi tatile göre** hesaplanır, aynı kitap **aynı anda iki kişiye verilemez** (eş zamanlılık veritabanı düzeyinde korunur) ve **ödünç geçmişi silinemez** (yabancı anahtar ve benzersiz ISBN ile veri bütünlüğü).
 
 ## Hızlı başlangıç (Docker)
-Gereksinim: Docker. Tek komutla SQL Server ve API ayağa kalkar, migration'lar otomatik uygulanır:
+Gereksinim: Docker. SQL Server ve API birlikte ayağa kalkar, migration'lar otomatik uygulanır. Önce `.env` dosyasını oluşturup JWT anahtarını ve ilk yönetici parolasını doldurun (bunlar olmadan compose başlamaz):
 ```bash
+cp .env.example .env     # JWT_SECRET (en az 32 karakter) ve ADMIN_PASSWORD (en az 8 karakter) zorunlu
 docker compose up --build
 ```
-Arayüz: http://localhost:8080 · Swagger: http://localhost:8080/swagger. Parola yerel denemeye yöneliktir; `MSSQL_SA_PASSWORD` ortam değişkeniyle değiştirilebilir. Veri `sqldata` birimi içinde kalıcıdır (`docker compose down -v` siler).
+Arayüz: http://localhost:8080 · Swagger: http://localhost:8080/swagger. Giriş için kullanıcı adı `ADMIN_USERNAME` (varsayılan `yonetici`), parola `ADMIN_PASSWORD`. SQL Server `sa` parolasının varsayılanı yerel denemeye yöneliktir; `MSSQL_SA_PASSWORD` ile değiştirilebilir. Veri `sqldata` birimi içinde kalıcıdır (`docker compose down -v` siler).
 
 Docker yerine yerelde çalıştırmak için aşağıdaki [Çalıştırma](#çalıştırma) bölümüne bakın.
 
@@ -27,6 +28,7 @@ Docker yerine yerelde çalıştırmak için aşağıdaki [Çalıştırma](#çal�
 | İş kuralları | `Services/LoanCalculator` (saf, durumsuz sınıf) | Teslim tarihi, gecikme günü ve ceza hesabı veritabanına ve HTTP'ye bağlı değildir; birim testle doğrudan sınanır |
 | Veri erişimi | Entity Framework Core 8 + migration'lar | Şema sürümlenir; geçişler tekrarlanabilir ve testlerde gerçek SQL Server'a karşı doğrulanır |
 | Veritabanı | SQL Server (rowversion, unique index, yabancı anahtar) | Eş zamanlılık ve veri bütünlüğü kısıtları veritabanında zorlanır, yalnızca uygulama koduna bırakılmaz |
+| Kimlik ve yetki | JWT (HS256) + rol bazlı yetki (`Admin`, `Librarian`), parola özeti `PasswordHasher` (PBKDF2) | Açık kayıt yok, hesapları yönetici açar; her istekte kullanıcı veritabanından doğrulanır, pasife alınan anında reddedilir |
 | Doğrulama | Veri açıklamaları + `TcknDogrulayici` | Girdi hataları 400, çakışmalar 409 ile ayrışır |
 | Arayüz | Sade HTML/CSS/JS (`wwwroot`), derleme adımı yok | Harici bağımlılık yok; CSP ile satır içi betik/stil kullanılmaz |
 | Test | xUnit, `WebApplicationFactory`, gerçek SQL Server testleri | Bellek içi sağlayıcının üretemediği davranışlar (çakışma, kısıtlar, migration) gerçek veritabanında sınanır |
@@ -60,7 +62,16 @@ erDiagram
         datetime2 DueDate
         datetime2 ActualReturnDate "null = henüz iade edilmedi"
     }
+    Users {
+        int Id PK
+        nvarchar50 Username UK "benzersiz"
+        nvarchar200 PasswordHash "PBKDF2, düz parola saklanmaz"
+        nvarchar20 Role "Admin, Librarian"
+        bit IsActive "pasif hesap giriş yapamaz"
+        datetime2 CreatedAt
+    }
 ```
+`Users` tablosu kitap ve ödünç tablolarıyla ilişkili değildir (kimlik doğrulama için ayrıdır).
 `CheckOuts_Yetim`, `VeriButunlugu` migration'ı sırasında kitabı silinmiş eski kayıtların taşındığı arşiv tablosudur (yalnızca eski veritabanlarında oluşur).
 
 ## API belgeleri (Swagger)
@@ -75,6 +86,10 @@ Dosyalar `LibraryApp/LibraryApp/wwwroot` altındadır (sade HTML, CSS ve JavaScr
 - Ödünç verme: ad, telefon, T.C. kimlik no doğrulaması; iade alırken gecikme günü ve ceza önceden gösterilir
 - Kitap bazında ödünç geçmişi (kişisel veri göstermez)
 - Mobilde de kullanılabilir, koyu tema desteği
+
+| Giriş ekranı | Kullanıcı yönetimi (yönetici) |
+|---|---|
+| ![Giriş](docs/screenshots/arayuz-giris.jpg) | ![Kullanıcılar](docs/screenshots/arayuz-kullanici-yonetimi.jpg) |
 
 Güvenlik: metinler `textContent` ile yazılır (`innerHTML` yok), sayfa `Content-Security-Policy` ile sunulur ve satır içi betik/stil kullanmaz.
 
@@ -91,46 +106,54 @@ Güvenlik: metinler `textContent` ile yazılır (`innerHTML` yok), sayfa `Conten
 - **Ödünç verme** (`POST /api/books/checkout/{id}`): kitap zaten ödünçteyse reddedilir, teslim tarihi **15 iş günü** sonrası olarak hesaplanır (hafta sonları sayılmaz)
 - **İade** (`POST /api/books/checkin/{id}`): gecikme iş günü sayısı üzerinden **günlük 5 ₺ ceza** hesaplanır; yanıtta `lateDays` ve `fine` alanları da döner. Son teslim günü içindeki iade zamanında sayılır; hafta sonları ve resmi tatiller ne teslim süresine ne de cezaya dahil edilir
 - Ödünç kaydı (CheckOut) geçmişi tutulur; girdiler doğrulanır (ad zorunlu, T.C. kimlik no 11 hane ve resmi sağlama algoritmasına uygun olmalı)
-- EF Core migration'ları, Swagger UI (geliştirme ortamında)
+- **Kimlik doğrulama ve roller:** JWT ile giriş (`POST /api/auth/login`, IP başına dakikada 10 deneme). Tüm kitap uç noktaları girişi gerektirir. **Admin**: her şey, kitap silme ve kullanıcı yönetimi dahil. **Librarian (görevli)**: kitap ekleme/düzenleme, ödünç verme, iade ve geçmiş; kitap silemez, kullanıcı yönetemez (403). Açık kayıt yoktur; ilk yönetici açılışta `Auth__AdminUsername`/`Auth__AdminPassword` ile oluşturulur. Pasife alınan kullanıcının elindeki token bir sonraki istekte reddedilir; kullanıcı kendini ve son aktif yöneticiyi pasife alamaz.
+- EF Core migration'ları, Swagger UI (geliştirme ortamında; sağ üstteki **Authorize** ile token girilir)
 
 ## Uç noktalar
-| Yöntem | Yol | Açıklama |
-|---|---|---|
-| GET | `/api/books`, `/api/books/{id}` | Listele / getir |
-| POST | `/api/books` | Kitap ekle |
-| PUT | `/api/books/{id}` | Güncelle |
-| DELETE | `/api/books/{id}` | Sil |
-| POST | `/api/books/checkout/{id}` | Ödünç ver (gövde: ad, telefon, TCKN) |
-| POST | `/api/books/checkin/{id}` | İade al, gecikme günü ve cezayı döndür |
-| GET | `/api/books/{id}/fine-preview` | İade edilirse şu an uygulanacak gecikme günü ve ceza (iade etmeden önce gösterilir) |
-| GET | `/api/books/{id}/history` | Ödünç geçmişi (ad ve tarihler; TCKN ve telefon dönmez) |
+| Yöntem | Yol | Yetki | Açıklama |
+|---|---|---|---|
+| POST | `/api/auth/login` | herkese açık | JWT alır (kullanıcı adı + parola) |
+| GET | `/api/auth/me` | giriş yapmış | Oturumdaki kullanıcı ve rolü |
+| GET/POST | `/api/users` | Admin | Kullanıcıları listele / ekle (rol: `Admin` veya `Librarian`) |
+| POST | `/api/users/{id}/deactivate`, `/activate` | Admin | Kullanıcıyı pasife al / etkinleştir |
+| GET | `/api/books`, `/api/books/{id}` | Admin, Librarian | Listele / getir |
+| POST | `/api/books` | Admin, Librarian | Kitap ekle |
+| PUT | `/api/books/{id}` | Admin, Librarian | Güncelle |
+| DELETE | `/api/books/{id}` | **Admin** | Sil |
+| POST | `/api/books/checkout/{id}` | Admin, Librarian | Ödünç ver (gövde: ad, telefon, TCKN) |
+| POST | `/api/books/checkin/{id}` | Admin, Librarian | İade al, gecikme günü ve cezayı döndür |
+| GET | `/api/books/{id}/fine-preview` | Admin, Librarian | İade edilirse şu an uygulanacak gecikme günü ve ceza (iade etmeden önce gösterilir) |
+| GET | `/api/books/{id}/history` | Admin, Librarian | Ödünç geçmişi (ad ve tarihler; TCKN ve telefon dönmez) |
 
 ## Çalıştırma
 Gereksinimler: .NET 8 SDK ve SQL Server (varsayılan bağlantı: `(localdb)\mssqllocaldb`, Windows'ta Visual Studio ile gelir).
 ```bash
 cd LibraryApp/LibraryApp
 dotnet ef database update      # veritabanını oluşturur (dotnet tool install --global dotnet-ef)
+export Auth__AdminUsername=yonetici Auth__AdminPassword=<en-az-8-karakter>   # ilk yönetici (PowerShell: $env:Auth__AdminPassword = '...')
 dotnet run                     # Arayüz: http://localhost:5210  ·  Swagger: /swagger
 ```
-Örnek kitap ve ödünç kayıtlarıyla denemek için uygulama çalışırken: `node scripts/demo-verisi.mjs` (Node 18+; ISBN'ler örnek değerlerdir).
+Geliştirme ortamında JWT anahtarı `appsettings.Development.json` içindeki yalnızca geliştirmeye özel değerdir; **üretimde `Jwt__Secret` (en az 32 karakter) ortam değişkeniyle verilmelidir, yoksa uygulama başlamaz**. Giriş ekranı `/` adresindedir.
+
+Örnek kitap ve ödünç kayıtlarıyla denemek için uygulama çalışırken: `ADMIN_USERNAME=... ADMIN_PASSWORD=... node scripts/demo-verisi.mjs` (Node 18+; yönetici bilgileri yukarıda verdikleriniz; ISBN'ler örnek değerlerdir).
 
 ```bash
-dotnet test LibraryApp/LibraryApp.sln   # 63 test (SQL Server testleri BOOKTRACK_TEST_SQL tanımlı değilse atlanır)
+dotnet test LibraryApp/LibraryApp.sln   # 75 test (SQL Server testleri BOOKTRACK_TEST_SQL tanımlı değilse atlanır)
 ```
 **Resmi tatiller** `appsettings.json` içindeki `Library:Holidays` listesinden okunur (yyyy-MM-dd); 2026 tatilleri tanımlıdır. Listede olmayan bir yıl için tatiller iş günü sayılır, bu yüzden her yıl başında güncelleyin.
 
 Farklı bir SQL Server için `ConnectionStrings:DefaultConnection` değerini değiştirin.
 
 ## Testler
-xUnit ile 63 test: ödünç süresi ve gecikme hesabı (hafta sonu, resmi tatil ve sınır durumları, `LoanCalculator`), kitap doğrulaması, ödünç verme/iade akışı, gecikme cezası, ödünçteki ve geçmişi olan kitabın silinememesi, ISBN tekrarı, alan uzunlukları, T.C. kimlik no algoritması, geçmiş uç noktasının kişisel veri sızdırmaması ve arayüzün güvenlik başlıkları (`WebApplicationFactory` + bellek içi veritabanı). **Eş zamanlılık:** aynı kitap aynı anda birden fazla kişiye ödünç verilemez. `Book` kaydında SQL Server `rowversion` sütunu vardır; çakışan istekten yalnızca biri başarılı olur, diğeri 409 (veya kitap artık ödünçte olduğu için 400) alır ve reddedilen isteğin ödünç kaydı yazılmaz. Bu davranış, unique index, yabancı anahtar ve veri taşıyan migration bellek içi sağlayıcıyla üretilemediği için gerçek SQL Server'a karşı test edilir (9 test, her biri kendi geçici veritabanını kurar ve siler):
+xUnit ile 75 test: kimlik doğrulama ve yetki (kimliksiz istek 401, sahte/bozuk/yabancı anahtarlı token reddi, rol kısıtları, pasife alınan kullanıcının token'ının anında geçersiz olması, kendini/son yöneticiyi pasife alma engeli, giriş hız sınırı, anahtarsız başlatmama), ödünç süresi ve gecikme hesabı (hafta sonu, resmi tatil ve sınır durumları, `LoanCalculator`), kitap doğrulaması, ödünç verme/iade akışı, gecikme cezası, ödünçteki ve geçmişi olan kitabın silinememesi, ISBN tekrarı, alan uzunlukları, T.C. kimlik no algoritması, geçmiş uç noktasının kişisel veri sızdırmaması ve arayüzün güvenlik başlıkları (`WebApplicationFactory` + bellek içi veritabanı). **Eş zamanlılık:** aynı kitap aynı anda birden fazla kişiye ödünç verilemez. `Book` kaydında SQL Server `rowversion` sütunu vardır; çakışan istekten yalnızca biri başarılı olur, diğeri 409 (veya kitap artık ödünçte olduğu için 400) alır ve reddedilen isteğin ödünç kaydı yazılmaz. Bu davranış, unique index, yabancı anahtar ve veri taşıyan migration bellek içi sağlayıcıyla üretilemediği için gerçek SQL Server'a karşı test edilir (9 test, her biri kendi geçici veritabanını kurar ve siler):
 ```powershell
-$env:BOOKTRACK_TEST_SQL = 'Server=(localdb)mssqllocaldb;Integrated Security=true;TrustServerCertificate=True'
+$env:BOOKTRACK_TEST_SQL = 'Server=(localdb)\mssqllocaldb;Integrated Security=true;TrustServerCertificate=True'
 dotnet test LibraryApp/LibraryApp.sln
 ```
 GitHub Actions her push ve pull request'te bir SQL Server servisiyle derleme ve tüm testleri çalıştırır.
 
 ## Bilinen sınırlar
-Kimlik doğrulama, rol bazlı yetkilendirme ve denetim kaydı (audit log) yok (arayüz ve API herkese açıktır; yalnızca güvenli bir ağda çalıştırın); denetleyici veri erişimini doğrudan `DbContext` ile yapar, ayrı repository/uygulama katmanı yoktur; dini bayram tarihleri her yıl değiştiği için resmi tatil listesi yılbaşında güncellenmelidir. TCKN kişisel veridir: üretimde saklama/şifreleme politikası gerekir.
+Denetim kaydı (audit log) yok: kimin hangi kitabı ödünç verdiği/sildiği ayrıca kaydedilmez (ödünç geçmişi kitap bazındadır). Token yenileme ve oturumu sunucuda kapatma yok; token süresi (varsayılan 8 saat, `Jwt__TtlMinutes`) dolana kadar geçerlidir, ancak pasife alınan hesabın token'ı hemen reddedilir. Parola değiştirme ve sıfırlama uç noktası yok (yönetici yeni hesap açar); giriş hız sınırı bellektedir (tek örnek) ve ters vekil arkasında istemci IP'si için `ForwardedHeaders` gerekir; token tarayıcıda `sessionStorage`'da tutulur. Denetleyici veri erişimini doğrudan `DbContext` ile yapar, ayrı repository/uygulama katmanı yoktur; dini bayram tarihleri her yıl değiştiği için resmi tatil listesi yılbaşında güncellenmelidir. TCKN kişisel veridir: üretimde saklama/şifreleme politikası gerekir.
 
 ## Mevcut veritabanını güncelleme (`VeriButunlugu` migration'ı)
 `dotnet ef database update` ISBN benzersizliği, `CheckOut` → `Book` yabancı anahtarı ve alan uzunluklarını (başlık 300, ISBN 20) ekler. Eski veriyle güvenli çalışır:

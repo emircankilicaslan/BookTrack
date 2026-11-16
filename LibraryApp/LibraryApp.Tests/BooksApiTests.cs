@@ -32,6 +32,7 @@ public class BooksApiTests : IClassFixture<BooksApiTests.Fabrika>
         {
             builder.UseEnvironment("Development");
             builder.UseSetting("Library:Holidays:0", Tatil.ToString("yyyy-MM-dd"));
+            TestAuth.Configure(builder);
             builder.ConfigureServices(services =>
             {
                 var eski = services.Where(d => d.ServiceType == typeof(DbContextOptions<LibraryContext>)).ToList();
@@ -47,7 +48,7 @@ public class BooksApiTests : IClassFixture<BooksApiTests.Fabrika>
     public BooksApiTests(Fabrika fabrika)
     {
         _fabrika = fabrika;
-        _istemci = fabrika.CreateClient();
+        _istemci = TestAuth.Admin(fabrika); // çoğu test yönetici olarak çalışır; yetki testleri AuthTests'tedir
     }
 
     private static string YeniIsbn() => ("978-" + Guid.NewGuid().ToString("N"))[..20];

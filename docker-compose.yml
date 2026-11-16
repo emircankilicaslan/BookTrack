@@ -1,6 +1,7 @@
 # Tek komutla çalıştırma:  docker compose up --build
 # Arayüz: http://localhost:8080   ·   Swagger: http://localhost:8080/swagger
-# Parola yalnızca yerel deneme içindir; gerçek ortamda .env dosyasından veya gizli yönetiminden verin.
+# Önce:  cp .env.example .env   (JWT_SECRET ve ADMIN_PASSWORD zorunludur; yoksa compose başlamaz)
+# SQL Server sa parolasının varsayılanı yalnızca yerel deneme içindir; gerçek ortamda .env ile verin.
 services:
   sql:
     image: mcr.microsoft.com/mssql/server:2022-latest
@@ -24,6 +25,9 @@ services:
       - "8080:8080"
     environment:
       ConnectionStrings__DefaultConnection: "Server=sql,1433;Database=LibraryDb;User Id=sa;Password=${MSSQL_SA_PASSWORD:-Yerel-Deneme-Parola-1!};TrustServerCertificate=True;MultipleActiveResultSets=true"
+      Jwt__Secret: ${JWT_SECRET:?JWT_SECRET tanımlanmalı (en az 32 karakter)}
+      Auth__AdminUsername: ${ADMIN_USERNAME:-yonetici}
+      Auth__AdminPassword: ${ADMIN_PASSWORD:?ADMIN_PASSWORD tanımlanmalı (en az 8 karakter)}
       Database__MigrateOnStartup: "true"
       Swagger__Enabled: "true"
       HttpsRedirection__Enabled: "false"

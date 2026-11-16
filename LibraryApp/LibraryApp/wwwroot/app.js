@@ -33,14 +33,35 @@ function tcknGecerli(t) {
 const tarih = (s) => (s ? new Date(s).toLocaleDateString("tr-TR", { day: "numeric", month: "short", year: "numeric" }) : "–");
 const tarihSaat = (s) => (s ? new Date(s).toLocaleString("tr-TR", { dateStyle: "medium", timeStyle: "short" }) : "–");
 
-class ApiHatasi extends Error {}
+class ApiHatasi extends Error {
+  constructor(mesaj, durum) { super(mesaj); this.durum = durum; }
+}
+
+// Oturum: token yalnızca sekme açıkken tutulur (sessionStorage); sekme kapanınca silinir. Depolama kapalıysa bellekte kalır.
+const Oturum = (() => {
+  let bellek = null;
+  return {
+    oku() { try { return JSON.parse(sessionStorage.getItem("booktrack.oturum")) ?? bellek; } catch { return bellek; } },
+    yaz(o) { bellek = o; try { sessionStorage.setItem("booktrack.oturum", JSON.stringify(o)); } catch { /* depolama kapalı */ } },
+    sil() { bellek = null; try { sessionStorage.removeItem("booktrack.oturum"); } catch { /* depolama kapalı */ } },
+  };
+})();
 
 async function api(yol, { yontem = "GET", govde } = {}) {
+  const oturum = Oturum.oku();
+  const basliklar = {};
+  if (govde !== undefined) basliklar["Content-Type"] = "application/json";
+  if (oturum?.token) basliklar.Authorization = `Bearer ${oturum.token}`;
   const r = await fetch(yol, {
     method: yontem,
-    headers: govde !== undefined ? { "Content-Type": "application/json" } : {},
+    headers: basliklar,
     body: govde !== undefined ? JSON.stringify(govde) : undefined,
   });
+  if (r.status === 401 && oturum?.token && yol !== "/api/auth/login") {
+    cikis("Oturum süresi doldu ya da hesabın pasife alındı. Lütfen yeniden giriş yapın.");
+    throw new ApiHatasi("Oturum süresi doldu.", 401);
+  }
+  if (r.status === 403) throw new ApiHatasi("Bu işlem için yetkiniz yok.", 403);
   if (!r.ok) {
     let mesaj = `İstek başarısız (${r.status}).`;
     try {
@@ -49,7 +70,7 @@ async function api(yol, { yontem = "GET", govde } = {}) {
       else if (p.errors) mesaj = Object.values(p.errors).flat().join(" ");
       else if (typeof p === "string") mesaj = p;
     } catch { /* gövde yok veya düz metin */ }
-    throw new ApiHatasi(mesaj);
+    throw new ApiHatasi(mesaj, r.status);
   }
   if (r.status === 204) return null;
   const metin = await r.text();
@@ -76,7 +97,9 @@ const hataGoster = (e) => duyur("hata", e.message || String(e));
 // Durum ve çizim
 // ---------------------------------------------------------------------------
 
-const durum = { kitaplar: [], filtre: "hepsi", ara: "", birikmisCeza: 0 };
+const durum = { kitaplar: [], filtre: "hepsi", ara: "", birikmisCeza: 0, ben: null };
+const yonetici = () => durum.ben?.role === "Admin";
+const ROL_AD = { Admin: "Yönetici", Librarian: "Görevli" };
 
 const gecikmis = (k) => k.isCheckedOut && k.dueDate && new Date(k.dueDate) < new Date();
 const turkceKucult = (s) => (s || "").toLocaleLowerCase("tr-TR");
@@ -136,7 +159,8 @@ function ciz() {
         : h("button", { class: "dugme birincil kucuk", onclick: () => oduncDialogu(k) }, "Ödünç ver"),
       h("button", { class: "dugme ikincil kucuk", onclick: () => gecmisDialogu(k) }, "Geçmiş"),
       h("button", { class: "dugme ikincil kucuk", onclick: () => kitapDialogu(k) }, "Düzenle"),
-      h("button", { class: "dugme tehlike kucuk", disabled: k.isCheckedOut, title: k.isCheckedOut ? "Ödünçteki kitap silinemez" : "", onclick: () => silDialogu(k) }, "Sil")))));
+      // Silme yalnızca Admin'e açıktır (sunucu da aynı kuralı uygular); görevli bu düğmeyi görmez.
+      yonetici() ? h("button", { class: "dugme tehlike kucuk", disabled: k.isCheckedOut, title: k.isCheckedOut ? "Ödünçteki kitap silinemez" : "", onclick: () => silDialogu(k) }, "Sil") : null))));
 }
 
 $("#ara").addEventListener("input", (e) => { durum.ara = e.target.value; ciz(); });
@@ -277,5 +301,101 @@ function silDialogu(k) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Kullanıcı yönetimi (yalnızca Admin)
+// ---------------------------------------------------------------------------
+
+async function kullanicilarDialogu() {
+  $("#dialog-icerik").replaceChildren(h("p", { class: "soluk" }, "Yükleniyor…"));
+  if (!dialog.open) dialog.showModal();
+  try {
+    const liste = await api("/api/users");
+    const degistir = async (u) => {
+      try { await api(`/api/users/${u.id}/${u.isActive ? "deactivate" : "activate"}`, { yontem: "POST" }); await kullanicilarDialogu(); }
+      catch (e) { hataGoster(e); }
+    };
+    $("#dialog-icerik").replaceChildren(
+      h("h2", {}, "Kullanıcılar"),
+      h("p", { class: "soluk" }, "Kayıt yoktur: hesapları yalnızca yönetici açar. Pasife alınan kullanıcı anında oturumunu kaybeder."),
+      h("ul", { class: "gecmis" }, liste.map((u) => h("li", {},
+        h("strong", {}, u.username), " ", h("span", { class: `rozet ${u.isActive ? "r-musait" : "r-gecikmis"}` }, u.isActive ? ROL_AD[u.role] ?? u.role : "Pasif"),
+        h("div", { class: "eylemler" },
+          u.username === durum.ben.username ? h("span", { class: "soluk" }, "(sen)")
+            : h("button", { class: `dugme ${u.isActive ? "tehlike" : "ikincil"} kucuk`, onclick: () => degistir(u) }, u.isActive ? "Pasife al" : "Etkinleştir"))))),
+      h("div", { class: "dialog-alt" },
+        h("button", { class: "dugme ikincil", onclick: kapat }, "Kapat"),
+        h("button", { class: "dugme birincil", onclick: kullaniciEkleDialogu }, "+ Kullanıcı ekle")));
+  } catch (e) { kapat(); hataGoster(e); }
+}
+
+function kullaniciEkleDialogu() {
+  formPenceresi({
+    baslik: "Kullanıcı ekle", onay: "Ekle",
+    aciklama: "Görevli kitap ekler/düzenler, ödünç verir ve iade alır; kitap silemez. Yönetici ayrıca kitap siler ve kullanıcıları yönetir.",
+    alanlar: [
+      alan("Kullanıcı adı", h("input", { name: "username", required: true, minlength: "3", maxlength: "50", autocomplete: "off" }), true),
+      alan("Parola (en az 8 karakter)", h("input", { name: "password", type: "password", required: true, minlength: "8", maxlength: "100", autocomplete: "new-password" }), true),
+      alan("Rol", h("select", { name: "role" }, h("option", { value: "Librarian" }, "Görevli"), h("option", { value: "Admin" }, "Yönetici")), true),
+    ],
+    gonder: async (f) => {
+      const username = f.get("username").trim(), password = f.get("password");
+      if (username.length < 3) throw new ApiHatasi("Kullanıcı adı en az 3 karakter olmalıdır.");
+      if (password.length < 8) throw new ApiHatasi("Parola en az 8 karakter olmalıdır.");
+      await api("/api/users", { yontem: "POST", govde: { username, password, role: f.get("role") } });
+      duyur("basari", "Kullanıcı eklendi.");
+      await kullanicilarDialogu();
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Giriş / çıkış
+// ---------------------------------------------------------------------------
+
+function cikis(mesaj = "") {
+  Oturum.sil();
+  durum.ben = null;
+  if (dialog.open) dialog.close();
+  $("#uygulama").hidden = true;
+  $("#giris").hidden = false;
+  const hata = $("#giris-hata");
+  hata.textContent = mesaj;
+  hata.hidden = !mesaj;
+}
+
+async function uygulamayiAc() {
+  const o = Oturum.oku();
+  durum.ben = { username: o.username, role: o.role };
+  $("#kullanici").textContent = `${o.username} · ${ROL_AD[o.role] ?? o.role}`;
+  $("#kullanicilar-ac").hidden = !yonetici();
+  $("#giris").hidden = true;
+  $("#uygulama").hidden = false;
+  await yukle();
+}
+
+$("#giris-form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const f = ev.target, hata = $("#giris-hata"), dugme = $("#giris-gonder");
+  hata.hidden = true;
+  dugme.disabled = true;
+  try {
+    const y = await api("/api/auth/login", { yontem: "POST", govde: { username: f.username.value.trim(), password: f.password.value } });
+    Oturum.yaz({ token: y.token, username: y.username, role: y.role });
+    f.reset();
+    await uygulamayiAc();
+  } catch (e) {
+    hata.textContent = e.durum === 429 ? "Çok fazla deneme. Biraz bekleyip tekrar deneyin." : e.message;
+    hata.hidden = false;
+  } finally { dugme.disabled = false; }
+});
+
+$("#cikis").addEventListener("click", () => cikis());
+$("#kullanicilar-ac").addEventListener("click", kullanicilarDialogu);
 $("#kitap-ekle").addEventListener("click", () => kitapDialogu(null));
-yukle();
+
+// Açılışta: kayıtlı oturum varsa sunucuda doğrulanır (süresi dolmuş/pasif hesap için giriş ekranına döner).
+if (Oturum.oku()?.token) {
+  api("/api/auth/me").then((me) => { Oturum.yaz({ ...Oturum.oku(), username: me.username, role: me.role }); return uygulamayiAc(); }).catch(() => cikis());
+} else {
+  $("#giris").hidden = false;
+}

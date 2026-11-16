@@ -164,10 +164,12 @@ public sealed class SqlVeriButunluguTests : IAsyncLifetime
         {
             b.UseEnvironment("Development");
             b.UseSetting("ConnectionStrings:DefaultConnection", _cs);
+            b.UseSetting("Database:MigrateOnStartup", "true");
+            TestAuth.Configure(b);
         });
         using (var kapsam = fabrika.Services.CreateScope())
             await kapsam.ServiceProvider.GetRequiredService<LibraryContext>().Database.MigrateAsync();
-        var istemci = fabrika.CreateClient();
+        var istemci = await TestAuth.AdminAsync(fabrika);
 
         var k = new { title = "Kitap", isbn = "555", publicationYear = 2000, price = 10 };
         var ilk = await istemci.PostAsJsonAsync("/api/books", k);

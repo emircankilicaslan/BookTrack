@@ -1,14 +1,19 @@
 // Demo verisi yükler: örnek kitaplar ve bir kısmı için ödünç kayıtları (Node 18+).
-// Kullanım: node scripts/demo-verisi.mjs [http://localhost:5210]
+// Kullanım: ADMIN_USERNAME=... ADMIN_PASSWORD=... node scripts/demo-verisi.mjs [http://localhost:5210]
+// (uygulamayı başlatırken Auth__AdminUsername / Auth__AdminPassword ile verdiğiniz değerler)
 // ISBN'ler örnek değerlerdir; gerçek yayınlara ait değildir.
 const B = process.argv[2] || 'http://localhost:5210';
+const KULLANICI = process.env.ADMIN_USERNAME, PAROLA = process.env.ADMIN_PASSWORD;
+if (!KULLANICI || !PAROLA) { console.error('ADMIN_USERNAME ve ADMIN_PASSWORD gerekli (uygulamayı başlatırken verdiğiniz yönetici bilgileri).'); process.exit(1); }
 
+let token = '';
 async function api(yol, yontem = 'GET', govde) {
-  const r = await fetch(B + yol, { method: yontem, headers: { 'Content-Type': 'application/json' }, body: govde ? JSON.stringify(govde) : undefined });
+  const r = await fetch(B + yol, { method: yontem, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) }, body: govde ? JSON.stringify(govde) : undefined });
   const t = await r.text();
   if (!r.ok) throw new Error(`${yontem} ${yol} -> ${r.status} ${t.slice(0, 200)}`);
   return t ? JSON.parse(t) : null;
 }
+token = (await api('/api/auth/login', 'POST', { username: KULLANICI, password: PAROLA })).token;
 
 const kitaplar = [
   ['Suç ve Ceza', 1866, 185], ['Tutunamayanlar', 1971, 240], ['Kürk Mantolu Madonna', 1943, 95], ['İnce Memed', 1955, 160],
