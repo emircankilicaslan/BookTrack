@@ -61,7 +61,9 @@ jobs:
         run: node scripts/demo-verisi.mjs http://localhost:5210
 
       - name: Gecikme ve geçmiş tarihleri ayarlanır
-        run: docker exec -i sql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$SQL_PAROLA" < tools/ekran-goruntusu/gecikme.sql
+        run: |
+          docker cp tools/ekran-goruntusu/gecikme.sql sql:/tmp/gecikme.sql
+          docker exec sql /opt/mssql-tools18/bin/sqlcmd -C -b -S localhost -U sa -P "$SQL_PAROLA" -i /tmp/gecikme.sql
 
       - name: Ekran görüntüleri alınır
         working-directory: tools/ekran-goruntusu
