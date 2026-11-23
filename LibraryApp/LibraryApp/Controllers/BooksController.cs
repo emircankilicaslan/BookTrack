@@ -69,10 +69,12 @@ namespace LibraryApp.Controllers
 
             if (!string.IsNullOrWhiteSpace(query.Q))
             {
-                var term = query.Q.Trim().ToLowerInvariant();
-                books = books.Where(b => b.Title.ToLowerInvariant().Contains(term)
-                    || b.ISBN.ToLowerInvariant().Contains(term)
-                    || (b.Author != null && b.Author.ToLowerInvariant().Contains(term)));
+                // LIKE joker karakterleri (% _ [) kullanıcı girdisinde düz metin sayılır. Büyük/küçük harf duyarsızlığı
+                // SQL Server'da sütun harmanlamasından gelir; ToLowerInvariant SQL'e çevrilemediği için kullanılmaz.
+                var pattern = "%" + query.Q.Trim().Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_").Replace("[", "\\[") + "%";
+                books = books.Where(b => EF.Functions.Like(b.Title, pattern, "\\")
+                    || EF.Functions.Like(b.ISBN, pattern, "\\")
+                    || (b.Author != null && EF.Functions.Like(b.Author, pattern, "\\")));
             }
             if (!string.IsNullOrWhiteSpace(query.Category))
             {
