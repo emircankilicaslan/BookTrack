@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>BookTrack · Kütüphane Takip</title>
-  <meta name="description" content="Kitap envanteri, ödünç verme ve iade takibi">
+  <meta name="description" content="Kitap envanteri, ödünç verme, uzatma ve iade takibi; raporlar ve denetim kaydı">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="app.css">
 </head>
@@ -36,6 +36,12 @@
       <button id="kitap-ekle" class="dugme birincil">+ Kitap ekle</button>
       <button id="cikis" class="dugme ikincil">Çıkış</button>
     </div>
+    <nav class="sekmeler" id="sekmeler" aria-label="Bölümler">
+      <button data-sekme="kitaplar" class="aktif">Kitaplar</button>
+      <button data-sekme="panel">Panel</button>
+      <button data-sekme="geciken">Geciken ödünçler</button>
+      <button data-sekme="denetim" id="sekme-denetim" hidden>Denetim kaydı</button>
+    </nav>
   </header>
 
   <main class="icerik">
@@ -44,20 +50,35 @@
 
     <section class="izgara" id="ozet" aria-label="Özet"></section>
 
-    <section class="kart">
+    <!-- Kitaplar -->
+    <section class="kart" id="bolum-kitaplar">
       <div class="arac-cubugu">
-        <input id="ara" type="search" placeholder="Başlık veya ISBN ara…" aria-label="Kitap ara">
+        <input id="ara" type="search" placeholder="Başlık, yazar veya ISBN ara…" aria-label="Kitap ara">
+        <select id="kategori" aria-label="Kategoriye göre süz"><option value="">Tüm kategoriler</option></select>
+        <select id="sirala" aria-label="Sırala">
+          <option value="title">Başlığa göre (A-Z)</option>
+          <option value="title:desc">Başlığa göre (Z-A)</option>
+          <option value="author">Yazara göre</option>
+          <option value="year:desc">Yayın yılı (yeni → eski)</option>
+          <option value="year">Yayın yılı (eski → yeni)</option>
+          <option value="price">Fiyat (artan)</option>
+          <option value="price:desc">Fiyat (azalan)</option>
+        </select>
         <div class="filtre" id="filtre" role="group" aria-label="Duruma göre filtrele">
           <button data-f="hepsi" class="aktif">Tümü</button>
           <button data-f="musait">Rafta</button>
           <button data-f="odunc">Ödünçte</button>
           <button data-f="gecikmis">Geciken</button>
         </div>
+        <div class="disa-aktar" role="group" aria-label="Dışa aktar">
+          <button class="dugme ikincil kucuk" data-indir="books:csv">CSV</button>
+          <button class="dugme ikincil kucuk" data-indir="books:xlsx">Excel</button>
+        </div>
       </div>
       <div class="tablo-kap">
         <table>
           <thead><tr>
-            <th>Kitap</th><th>ISBN</th><th>Yıl</th><th>Fiyat</th><th>Durum</th><th></th>
+            <th>Kitap</th><th>Kategori</th><th>ISBN</th><th>Yıl</th><th>Fiyat</th><th>Durum</th><th></th>
           </tr></thead>
           <tbody id="govde"></tbody>
         </table>
@@ -66,6 +87,52 @@
         <strong>Kitap bulunamadı</strong>
         <span>Aramayı ya da filtreyi değiştirmeyi deneyin.</span>
       </div>
+      <div class="sayfalama" id="sayfalama"></div>
+    </section>
+
+    <!-- Panel -->
+    <section id="bolum-panel" hidden>
+      <div class="izgara" id="panel-kartlar"></div>
+      <div class="panel-izgara">
+        <div class="kart panel-kutu"><h2>Aylık ödünç ve iade</h2><div id="grafik-aylik"></div></div>
+        <div class="kart panel-kutu"><h2>En çok ödünç alınanlar</h2><div id="liste-populer"></div></div>
+        <div class="kart panel-kutu"><h2>Kategorilere göre kitaplar</h2><div id="grafik-kategori"></div></div>
+      </div>
+    </section>
+
+    <!-- Geciken ödünçler -->
+    <section class="kart" id="bolum-geciken" hidden>
+      <div class="arac-cubugu">
+        <p class="soluk">Süresi geçmiş ödünçler, en çok geciken üstte. Gecikme iş günü olarak hesaplanır.</p>
+        <div class="disa-aktar" role="group" aria-label="Dışa aktar">
+          <button class="dugme ikincil kucuk" data-indir="overdue:csv">CSV</button>
+          <button class="dugme ikincil kucuk" data-indir="overdue:xlsx">Excel</button>
+        </div>
+      </div>
+      <div class="tablo-kap">
+        <table>
+          <thead><tr><th>Kitap</th><th>Okuyucu</th><th>Son teslim</th><th>Gecikme</th><th>Ceza</th><th></th></tr></thead>
+          <tbody id="govde-geciken"></tbody>
+        </table>
+      </div>
+      <div class="bos" id="bos-geciken" hidden><strong>Geciken ödünç yok</strong><span>Tüm kitaplar zamanında.</span></div>
+    </section>
+
+    <!-- Denetim kaydı (yalnızca Admin) -->
+    <section class="kart" id="bolum-denetim" hidden>
+      <div class="arac-cubugu">
+        <select id="denetim-islem" aria-label="İşleme göre süz"><option value="">Tüm işlemler</option></select>
+        <input id="denetim-kullanici" type="search" placeholder="Kullanıcı adı…" aria-label="Kullanıcıya göre süz">
+        <p class="soluk">Kayıt yalnızca okunur; kişisel veri ve parola yazılmaz.</p>
+      </div>
+      <div class="tablo-kap">
+        <table>
+          <thead><tr><th>Zaman</th><th>Kullanıcı</th><th>İşlem</th><th>Kayıt</th><th>Ayrıntı</th></tr></thead>
+          <tbody id="govde-denetim"></tbody>
+        </table>
+      </div>
+      <div class="bos" id="bos-denetim" hidden><strong>Kayıt yok</strong></div>
+      <div class="sayfalama" id="sayfalama-denetim"></div>
     </section>
   </main>
   </div>

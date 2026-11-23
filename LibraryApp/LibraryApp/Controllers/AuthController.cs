@@ -21,16 +21,18 @@ namespace LibraryApp.Controllers
     {
         private readonly LibraryContext _context;
         private readonly TokenService _tokens;
+        private readonly AuditService _audit;
         private readonly PasswordHasher<AppUser> _hasher = new();
 
         // Kullanıcı yoksa da bir özet karşılaştırması yapılır: yanıt süresiyle hesap varlığı sızmasın.
         private static readonly AppUser Dummy = new() { Username = "-" };
         private static readonly string DummyHash = new PasswordHasher<AppUser>().HashPassword(Dummy, "dummy-password-1");
 
-        public AuthController(LibraryContext context, TokenService tokens)
+        public AuthController(LibraryContext context, TokenService tokens, AuditService audit)
         {
             _context = context;
             _tokens = tokens;
+            _audit = audit;
         }
 
         [HttpPost("login")]
@@ -45,8 +47,13 @@ namespace LibraryApp.Controllers
             var user = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Username == username);
             var result = _hasher.VerifyHashedPassword(user ?? Dummy, user?.PasswordHash ?? DummyHash, request.Password);
             if (user is null || !user.IsActive || result == PasswordVerificationResult.Failed)
+            {
+                // Parola asla yazılmaz; olmayan kullanıcı adı da kayda geçer (deneme izi).
+                await _audit.LogAsync("GIRIS_BASARISIZ", "Oturum", user?.Id, null, username);
                 return Unauthorized(new { message = "Kullanıcı adı veya parola hatalı." });
+            }
 
+            await _audit.LogAsync("GIRIS", "Oturum", user.Id, null, user.Username);
             var (token, expires) = _tokens.Create(user);
             return new LoginResponse(token, expires, user.Username, user.Role);
         }

@@ -59,6 +59,46 @@ namespace LibraryApp.Migrations
                     b.ToTable("Users");
                 });
 
+            modelBuilder.Entity("LibraryApp.Models.AuditLog", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("Details")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int?>("EntityId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<DateTime>("Timestamp")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Username")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Timestamp");
+
+                    b.ToTable("AuditLogs");
+                });
+
             modelBuilder.Entity("LibraryApp.Models.Book", b =>
                 {
                     b.Property<int>("Id")
@@ -66,6 +106,14 @@ namespace LibraryApp.Migrations
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Author")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Category")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<DateTime?>("CheckOutDate")
                         .HasColumnType("datetime2");
@@ -88,6 +136,9 @@ namespace LibraryApp.Migrations
                         .HasColumnType("decimal(18, 2)");
 
                     b.Property<int>("PublicationYear")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RenewalCount")
                         .HasColumnType("int");
 
                     b.Property<byte[]>("RowVersion")
@@ -128,6 +179,12 @@ namespace LibraryApp.Migrations
                     b.Property<DateTime>("DueDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<decimal?>("FineAmount")
+                        .HasColumnType("decimal(18, 2)");
+
+                    b.Property<int?>("LateDays")
+                        .HasColumnType("int");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -136,6 +193,9 @@ namespace LibraryApp.Migrations
                     b.Property<string>("PhoneNumber")
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("RenewalCount")
+                        .HasColumnType("int");
 
                     b.Property<string>("TCKN")
                         .IsRequired()

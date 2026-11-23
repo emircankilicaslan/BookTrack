@@ -1,0 +1,80 @@
+name: Ekran görüntüleri
+
+# Uygulamayı SQL Server ile ayağa kaldırır, örnek veriyi gerçek API kurallarından geçirerek yükler,
+# birkaç ödüncü geriye alıp gecikmeyi gösterilebilir yapar ve README'deki görüntüleri tarayıcıdan alır.
+# Elle tetiklenir.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  goruntu:
+    runs-on: ubuntu-latest
+    env:
+      SQL_PAROLA: Ci-Goruntu-Parola-1!
+      ADMIN_USERNAME: yonetici
+      ADMIN_PASSWORD: ci-goruntu-yonetici-2026
+      GOREVLI_PAROLA: ci-goruntu-gorevli-2026
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: SQL Server başlatılır
+        run: |
+          docker run -d --name sql -e ACCEPT_EULA=Y -e "MSSQL_SA_PASSWORD=$SQL_PAROLA" -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest
+          for i in $(seq 1 40); do
+            if docker exec sql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$SQL_PAROLA" -Q "SELECT 1" > /dev/null 2>&1; then echo "SQL hazır ($i)"; exit 0; fi
+            sleep 3
+          done
+          docker logs sql | tail -n 40; exit 1
+
+      - name: Uygulama yayımlanır ve başlatılır
+        run: |
+          dotnet publish LibraryApp/LibraryApp/LibraryApp.csproj -c Release -o out
+          export ConnectionStrings__DefaultConnection="Server=localhost,1433;Database=LibraryDb;User Id=sa;Password=$SQL_PAROLA;TrustServerCertificate=True;MultipleActiveResultSets=true"
+          export Jwt__Secret="ci-goruntu-icin-uretilmis-en-az-32-karakterlik-anahtar"
+          export Auth__AdminUsername="$ADMIN_USERNAME" Auth__AdminPassword="$ADMIN_PASSWORD"
+          export Database__MigrateOnStartup=true Swagger__Enabled=true HttpsRedirection__Enabled=false
+          export RateLimit__LoginPerMinute=1000 ASPNETCORE_URLS=http://localhost:5210
+          nohup dotnet out/LibraryApp.dll > uygulama.log 2>&1 &
+          for i in $(seq 1 60); do
+            if [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:5210/)" = "200" ]; then echo "uygulama hazır ($i)"; exit 0; fi
+            sleep 3
+          done
+          tail -n 80 uygulama.log; exit 1
+
+      - name: Tarayıcı araçları kurulur
+        working-directory: tools/ekran-goruntusu
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+
+      - name: Örnek veri yüklenir
+        run: node scripts/demo-verisi.mjs http://localhost:5210
+
+      - name: Gecikme ve geçmiş tarihleri ayarlanır
+        run: docker exec -i sql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$SQL_PAROLA" < tools/ekran-goruntusu/gecikme.sql
+
+      - name: Ekran görüntüleri alınır
+        working-directory: tools/ekran-goruntusu
+        run: node goruntu.mjs
+
+      - name: Görüntüler depoya işlenir
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/screenshots
+          if git diff --cached --quiet; then echo "değişiklik yok"; exit 0; fi
+          git commit -m "Ekran görüntüleri çalışan uygulamadan yeniden üretildi"
+          git push
+
+      - name: Uygulama günlüğü (hata ayıklama)
+        if: failure()
+        run: tail -n 120 uygulama.log

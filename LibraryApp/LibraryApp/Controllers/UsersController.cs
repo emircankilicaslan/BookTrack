@@ -24,8 +24,13 @@ namespace LibraryApp.Controllers
     {
         private readonly LibraryContext _context;
         private readonly PasswordHasher<AppUser> _hasher = new();
+        private readonly AuditService _audit;
 
-        public UsersController(LibraryContext context) => _context = context;
+        public UsersController(LibraryContext context, AuditService audit)
+        {
+            _context = context;
+            _audit = audit;
+        }
 
         [HttpGet]
         public async Task<IEnumerable<UserView>> List() =>
@@ -47,7 +52,12 @@ namespace LibraryApp.Controllers
             var user = new AppUser { Username = username, Role = role, IsActive = true, CreatedAt = DateTime.UtcNow };
             user.PasswordHash = _hasher.HashPassword(user, request.Password!);
             _context.Users.Add(user);
-            try { await _context.SaveChangesAsync(); }
+            try
+            {
+                await _context.SaveChangesAsync();
+                _audit.Add("KULLANICI_OLUSTUR", "Kullanici", user.Id, $"{user.Username}, rol {user.Role}");
+                await _context.SaveChangesAsync();
+            }
             catch (DbUpdateException)
             {
                 // Denetim ile kayıt arasında aynı ad başka bir istekle eklendiyse unique index yakalar.
@@ -72,6 +82,7 @@ namespace LibraryApp.Controllers
                 return Conflict(new { message = "Kendi hesabınızı pasife alamazsınız." });
 
             user.IsActive = false;
+            _audit.Add("KULLANICI_PASIF", "Kullanici", id, user.Username);
             await _context.SaveChangesAsync();
             return NoContent();
         }
@@ -82,6 +93,7 @@ namespace LibraryApp.Controllers
             var user = await _context.Users.FindAsync(id);
             if (user == null) return NotFound();
             user.IsActive = true;
+            _audit.Add("KULLANICI_AKTIF", "Kullanici", id, user.Username);
             await _context.SaveChangesAsync();
             return NoContent();
         }

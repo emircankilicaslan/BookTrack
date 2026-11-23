@@ -17,6 +17,7 @@ namespace LibraryApp.Data
         public DbSet<Book> Books { get; set; }
         public DbSet<CheckOut> CheckOuts { get; set; }
         public DbSet<AppUser> Users { get; set; }
+        public DbSet<AuditLog> AuditLogs { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -27,6 +28,13 @@ namespace LibraryApp.Data
             modelBuilder.Entity<Book>()
                 .Property(b => b.Price)
                 .HasColumnType("decimal(18, 2)");
+
+            modelBuilder.Entity<CheckOut>()
+                .Property(c => c.FineAmount)
+                .HasColumnType("decimal(18, 2)");
+
+            modelBuilder.Entity<AuditLog>()
+                .HasIndex(a => a.Timestamp);
 
             modelBuilder.Entity<Book>()
                 .Property(b => b.RowVersion)

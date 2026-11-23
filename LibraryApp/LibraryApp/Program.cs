@@ -33,6 +33,8 @@ builder.Services.AddSwaggerGen(o =>
 // ---- Kimlik doğrulama: JWT (HS256) + rol bazlı yetki. Anahtar yoksa uygulama başlamaz.
 var signingKey = TokenService.SigningKey(builder.Configuration["Jwt:Secret"]);
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<AuditService>();
 builder.Services.AddSingleton<TokenService>();
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

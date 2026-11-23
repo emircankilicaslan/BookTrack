@@ -18,5 +18,12 @@ namespace LibraryApp.Models
         public DateTime CheckOutDate { get; set; }
         public DateTime DueDate { get; set; }
         public DateTime? ActualReturnDate { get; set; }
+
+        /// <summary>Bu ödüncün kaç kez uzatıldığı.</summary>
+        public int RenewalCount { get; set; }
+
+        /// <summary>İade anında hesaplanan gecikme (iş günü) ve ceza; iade edilmemiş kayıtta boştur.</summary>
+        public int? LateDays { get; set; }
+        public decimal? FineAmount { get; set; }
     }
 }

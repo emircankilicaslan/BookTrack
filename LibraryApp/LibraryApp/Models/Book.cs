@@ -15,6 +15,12 @@ namespace LibraryApp.Models
         [StringLength(20, ErrorMessage = "ISBN en fazla 20 karakter olabilir.")]
         public string ISBN { get; set; } = string.Empty;
 
+        [StringLength(200, ErrorMessage = "Yazar en fazla 200 karakter olabilir.")]
+        public string? Author { get; set; }
+
+        [StringLength(100, ErrorMessage = "Kategori en fazla 100 karakter olabilir.")]
+        public string? Category { get; set; }
+
         [Range(1000, 2100, ErrorMessage = "Yayın yılı 1000 ile 2100 arasında olmalıdır.")]
         public int PublicationYear { get; set; }
 
@@ -25,6 +31,9 @@ namespace LibraryApp.Models
         public string? CheckedOutBy { get; set; }
         public DateTime? CheckOutDate { get; set; }
         public DateTime? DueDate { get; set; }
+
+        /// <summary>Mevcut ödüncün kaç kez uzatıldığı; iade veya yeni ödünçle sıfırlanır.</summary>
+        public int RenewalCount { get; set; }
 
         /// <summary>
         /// Eş zamanlı değişiklik denetimi (SQL Server rowversion). İki istek aynı kitabı aynı anda değiştirmeye

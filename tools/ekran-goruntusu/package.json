@@ -1,0 +1,9 @@
+{
+  "name": "ekran-goruntusu",
+  "private": true,
+  "type": "module",
+  "description": "README ekran görüntülerini çalışan uygulamadan üretir (GitHub Actions: Ekran görüntüleri)",
+  "dependencies": {
+    "playwright": "1.48.2"
+  }
+}
