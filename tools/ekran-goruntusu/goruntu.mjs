@@ -33,9 +33,20 @@ async function cek(s, ad, secenek = {}) {
 }
 
 /** Aramayla tek kitaba iner ve satırını döndürür. */
+/** Tabloda tam n satır görünene kadar bekler (CSP 'unsafe-eval' vermediği için waitForFunction kullanılmaz). */
+async function satirSayisi(s, n) {
+  for (let i = 0; i < 60; i++) {
+    if ((await s.locator('#govde tr').count()) === n) return;
+    await s.waitForTimeout(200);
+  }
+  throw new Error('Tablo satır sayısı ' + n + ' olmadı');
+}
+
+/** Aramayla tek kitaba iner ve satırını döndürür. */
 async function satir(s, baslik, arama = baslik) {
   await s.fill('#ara', arama);
-  await s.waitForFunction((b) => document.querySelectorAll('#govde tr').length === 1 && document.querySelector('#govde strong')?.textContent === b, baslik);
+  await satirSayisi(s, 1);
+  await s.locator('#govde strong', { hasText: baslik }).first().waitFor();
   return s.locator('#govde tr').first();
 }
 
@@ -63,18 +74,18 @@ async function sekme(s, ad, bekle) {
   // Arama + sıralama + kategori
   await s.fill('#ara', 'dostoyevski');
   await s.selectOption('#sirala', 'year:desc');
-  await s.waitForFunction(() => document.querySelectorAll('#govde tr').length === 2);
+  await satirSayisi(s, 2);
   await cek(s, 'arayuz-arama', { fullPage: true });
   await s.fill('#ara', '');
-  await s.waitForFunction(() => document.querySelectorAll('#govde tr').length === 10);
+  await satirSayisi(s, 10);
   await s.selectOption('#sirala', 'title');
 
   // Geciken filtresi
   await s.click('#filtre button[data-f=gecikmis]');
-  await s.waitForFunction(() => document.querySelectorAll('#govde tr').length === 3);
+  await satirSayisi(s, 3);
   await cek(s, 'arayuz-geciken', { fullPage: true });
   await s.click('#filtre button[data-f=hepsi]');
-  await s.waitForFunction(() => document.querySelectorAll('#govde tr').length === 10);
+  await satirSayisi(s, 10);
 
   // İade (gecikmiş kitap: ceza gösterilir)
   await (await satir(s, 'Sefiller')).getByRole('button', { name: 'İade al' }).click();
