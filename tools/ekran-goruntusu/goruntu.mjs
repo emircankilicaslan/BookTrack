@@ -15,7 +15,12 @@ const tarayici = await chromium.launch();
 
 async function sayfaAc(secenek = {}) {
   const b = await tarayici.newContext({ viewport: { width: 1280, height: 800 }, locale: 'tr-TR', timezoneId: 'Europe/Istanbul', colorScheme: 'light', ...secenek });
-  return b.newPage();
+  const sayfa = await b.newPage();
+  // Tanı: tarayıcı hataları ve başarısız API istekleri iş akışı günlüğüne yazılır.
+  sayfa.on('pageerror', (e) => console.log('SAYFA HATASI:', e.message));
+  sayfa.on('console', (m) => { if (m.type() === 'error') console.log('KONSOL:', m.text()); });
+  sayfa.on('response', (r) => { if (r.url().includes('/api/') && r.status() >= 400) console.log('API', r.status(), r.url()); });
+  return sayfa;
 }
 
 async function girisYap(s) {
@@ -39,7 +44,7 @@ async function satirSayisi(s, n) {
     if ((await s.locator('#govde tr').count()) === n) return;
     await s.waitForTimeout(200);
   }
-  throw new Error('Tablo satır sayısı ' + n + ' olmadı');
+  throw new Error('Tablo satır sayısı ' + n + ' olmadı (şu an ' + (await s.locator('#govde tr').count()) + ', adres ' + s.url() + ')');
 }
 
 /** Aramayla tek kitaba iner ve satırını döndürür. */
