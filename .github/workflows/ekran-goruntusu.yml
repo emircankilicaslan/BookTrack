@@ -43,7 +43,8 @@ jobs:
           export Auth__AdminUsername="$ADMIN_USERNAME" Auth__AdminPassword="$ADMIN_PASSWORD"
           export Database__MigrateOnStartup=true Swagger__Enabled=true HttpsRedirection__Enabled=false
           export RateLimit__LoginPerMinute=1000 ASPNETCORE_URLS=http://localhost:5210
-          nohup dotnet out/LibraryApp.dll > uygulama.log 2>&1 &
+          # İçerik kökü yayım klasörüdür (wwwroot ve appsettings orada)
+          (cd out && nohup dotnet LibraryApp.dll > ../uygulama.log 2>&1 &)
           for i in $(seq 1 60); do
             if [ "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:5210/)" = "200" ]; then echo "uygulama hazır ($i)"; exit 0; fi
             sleep 3
