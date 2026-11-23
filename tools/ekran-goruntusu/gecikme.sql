@@ -1,9 +1,9 @@
 USE LibraryDb;
 GO
 -- Odunc taki ilk uc kitap gecikmis olsun (ekran goruntulerinde Geciken gosterimi icin)
-UPDATE Books SET DueDate = DATEADD(day, -14, DueDate), CheckOutDate = DATEADD(day, -30, CheckOutDate)
+UPDATE Books SET DueDate = DATEADD(day, -32, DueDate), CheckOutDate = DATEADD(day, -48, CheckOutDate)
 WHERE Id IN (SELECT TOP 3 Id FROM Books WHERE IsCheckedOut = 1 ORDER BY Id);
-UPDATE CheckOuts SET DueDate = DATEADD(day, -14, DueDate), CheckOutDate = DATEADD(day, -30, CheckOutDate)
+UPDATE CheckOuts SET DueDate = DATEADD(day, -32, DueDate), CheckOutDate = DATEADD(day, -48, CheckOutDate)
 WHERE ActualReturnDate IS NULL AND BookId IN (SELECT TOP 3 Id FROM Books WHERE IsCheckedOut = 1 ORDER BY Id);
 GO
 -- Iade edilmis gecmis kayitlar son alti aya dagilsin; bir kismi gecikmeli iade ve ceza icersin
