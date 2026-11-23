@@ -150,3 +150,9 @@ dialog:focus-visible { outline: none; }
   .sekmeler { padding: 0 1rem; }
   .disa-aktar { margin-left: 0; }
 }
+
+/* Eylem düğmeleri satıra sığmazsa alt satıra sarılır (yatay kaydırma gerekmesin) */
+td.eylemler { white-space: normal; min-width: 210px; max-width: 280px; }
+td.eylemler .dugme { margin: .15rem .2rem .15rem 0; }
+.eylemler > * + * { margin-left: 0; }
+td.kitap { min-width: 150px; }
