@@ -1,5 +1,5 @@
 # Çok aşamalı derleme: SDK ile yayımla, yalnızca çalışma zamanı imajıyla çalıştır.
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:11.0 AS build
 WORKDIR /src
 COPY LibraryApp/LibraryApp/LibraryApp.csproj LibraryApp/LibraryApp/
 RUN dotnet restore LibraryApp/LibraryApp/LibraryApp.csproj
