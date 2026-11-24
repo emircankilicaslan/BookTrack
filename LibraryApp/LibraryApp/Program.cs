@@ -5,6 +5,7 @@ using LibraryApp.Models;
 using LibraryApp.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -16,6 +17,9 @@ builder.Services.AddControllers();
 builder.Services.Configure<LibraryApp.Services.LibraryOptions>(builder.Configuration.GetSection(LibraryApp.Services.LibraryOptions.SectionName));
 builder.Services.AddDbContext<LibraryContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+// Sağlık denetimi: live yalnızca sürecin ayakta olduğunu, ready ise veritabanı bağlantısını da doğrular.
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<LibraryContext>("veritabani", tags: ["ready"]);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(o =>
 {
@@ -118,6 +122,10 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+
+// Kimlik doğrulamasızdır ve yalnızca durum döndürür; hata ayrıntısı (bağlantı dizesi vb.) dışarı verilmez.
+app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false }).AllowAnonymous();
+app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = r => r.Tags.Contains("ready") }).AllowAnonymous();
 
 app.Run();
 

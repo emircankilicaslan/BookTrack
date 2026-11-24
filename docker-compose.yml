@@ -31,6 +31,12 @@ services:
       Database__MigrateOnStartup: "true"
       Swagger__Enabled: "true"
       HttpsRedirection__Enabled: "false"
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /health/ready HTTP/1.0\r\n\r\n' >&3 && head -n1 <&3 | grep -q 200"]
+      interval: 10s
+      timeout: 3s
+      start_period: 30s
+      retries: 6
 
 volumes:
   sqldata:

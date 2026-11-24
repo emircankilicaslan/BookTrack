@@ -31,4 +31,19 @@ jobs:
       - name: Test (birim + SQL Server eş zamanlılık)
         env:
           BOOKTRACK_TEST_SQL: Server=localhost,1433;User Id=sa;Password=Ci-Test-Parola-1!;TrustServerCertificate=True
-        run: dotnet test LibraryApp/LibraryApp.sln -c Release --no-build --verbosity normal
+        run: >
+          dotnet test LibraryApp/LibraryApp.sln -c Release --no-build --verbosity normal
+          --settings LibraryApp/coverlet.runsettings
+          --collect:"XPlat Code Coverage" --results-directory coverage
+      - name: Kapsam özeti ve alt sınır
+        run: |
+          dosya=$(ls coverage/*/coverage.cobertura.xml | head -1)
+          oran=$(grep -o 'line-rate="[0-9.]*"' "$dosya" | head -1 | grep -o '[0-9.]*')
+          yuzde=$(awk -v o="$oran" 'BEGIN { printf "%.1f", o * 100 }')
+          echo "### Test kapsamı: %$yuzde (satır)" >> "$GITHUB_STEP_SUMMARY"
+          # Alt sınır %80; Migrations hariç mevcut oran %99 civarındadır.
+          awk -v o="$oran" 'BEGIN { exit (o >= 0.80 ? 0 : 1) }' || { echo "Kapsam %80 altına düştü: %$yuzde"; exit 1; }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kapsam-raporu
+          path: coverage/*/coverage.cobertura.xml
