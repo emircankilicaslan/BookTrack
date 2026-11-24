@@ -19,7 +19,7 @@ jobs:
       GOREVLI_PAROLA: ci-goruntu-gorevli-2026
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 8.0.x
       - uses: actions/setup-node@v4
