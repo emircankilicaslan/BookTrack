@@ -43,7 +43,7 @@ jobs:
           echo "### Test kapsamı: %$yuzde (satır)" >> "$GITHUB_STEP_SUMMARY"
           # Alt sınır %80; Migrations hariç mevcut oran %99 civarındadır.
           awk -v o="$oran" 'BEGIN { exit (o >= 0.80 ? 0 : 1) }' || { echo "Kapsam %80 altına düştü: %$yuzde"; exit 1; }
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: kapsam-raporu
           path: coverage/*/coverage.cobertura.xml
